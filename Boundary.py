@@ -22,16 +22,11 @@ class Boundary():
         """
         Get grid indices that are contained in this boundary segment
         """
-        total_x = int(room_size[0]/grid_size) + 1
-        total_y = int(room_size[1]/grid_size) + 1
 
         (x0, y0), (x1, y1) = self.location
 
         x_start, x_end = round(x0 / grid_size), round(y0 / grid_size)
         y_start, y_end = round(x1 / grid_size), round(y1 / grid_size)
-
-        #x_start, x_end = sorted((i0, i1))
-        #y_start, y_end = sorted((j0, j1))
 
         boundaries = {
         "left":   [(0.0, round(y*grid_size, 3)) for y in range(y_start, y_end + 1)],
