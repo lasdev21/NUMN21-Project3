@@ -2,6 +2,7 @@
 import numpy as np
 import scipy
 from Room import Room
+from mpi4py import MPI
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -204,6 +205,12 @@ if __name__ == '__main__':
     #room1.create_boundaries(array of boundaries for room 1)
     # Then arrange the rooms into an apartment
     delta_x = 1/2
-    apartment = Apartment()
-    apartment.initialize_apartment_proj3(delta_x)
-    #print(apartment)
+    comm = MPI.Comm.Clone(MPI.COMM_WORLD)
+    rank = comm.Get_rank()
+    if rank == 0:
+        print(f"Rank {rank} creating apartment")
+        apartment = Apartment()
+        apartment.initialize_apartment_proj3(delta_x)
+        #print(apartment)
+    else:
+        print(f"Hello from rank {rank}")
