@@ -11,6 +11,7 @@ class Apartment():
     # it actually is kind of horizontal in the array, but should work.
     def __init__(self):
         self.rooms = []
+        self.room_locs = []
         # Floor plan contains an array of values representing the apartment
         # Rooms are then inserted at specified locations in the floor plan
         # and take up the specified size and shape in the array
@@ -33,19 +34,25 @@ class Apartment():
         print(self)
         print()
         # Add room 1 at (0, 0)
-        self.add_room_to_plan(room1, np.array([0, 0]))
+        room1_loc = np.array([0, 0])
+        self.room_locs.append(room1_loc)
+        self.add_room_to_plan(room1, room1_loc)
         self.rooms.append(room1)
         print("Room 1 added:")
         print(self)
         print()
         # Add room 2 at (1, 0)
-        self.add_room_to_plan(room2, np.array([1, 0]))
+        room2_loc = np.array([1, 0])
+        self.room_locs.append(room2_loc)
+        self.add_room_to_plan(room2, room2_loc)
         self.rooms.append(room2)
         print("Room 2 added:")
         print(self)
         print()
         # Add room 3 at (2, 1)
-        self.add_room_to_plan(room3, np.array([2, 1]))
+        room2_loc = np.array([2, 1])
+        self.room_locs.append(room2_loc)
+        self.add_room_to_plan(room3, room2_loc)
         self.rooms.append(room3)
         print("Room 3 added:")
         print(self)
@@ -102,6 +109,10 @@ class Apartment():
         print(f"Before solve room1 temps:\n{room1.get_temp_array()}")
         self.solve(3, omega=0.8)
         
+        # Update floor plan and print
+        self.update_floor_plan()
+        print(self.floor_plan)
+        
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -134,6 +145,16 @@ class Apartment():
         self.floor_plan = new_plan
         return new_plan
     
+    def update_floor_plan(self):
+        # Update the current floor plan with the temp values in the rooms
+        for i in range(len(self.rooms)):
+            room = self.rooms[i]
+            room_array_loc = self.room_locs[i] * room.get_scale()
+            top_right = (room.get_dims() + self.room_locs[i]) * room.get_scale()
+            room_slice_x = slice(room_array_loc[0], top_right[0])
+            room_slice_y = slice(room_array_loc[1], top_right[1])
+            print(f"Room {i+1}, floor plan portion: {self.floor_plan[room_slice_x, room_slice_y].shape}")
+            self.floor_plan[room_slice_x, room_slice_y] = room.get_temp_array()
     
     def create_apartment(self):
         # Take some measure of number of rooms, their sizes, where they are
