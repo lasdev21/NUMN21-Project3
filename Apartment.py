@@ -1,7 +1,48 @@
 # Class for the apartment, which knows about it's rooms
 import numpy as np
 import scipy
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from Room import Room
+
+def plotting_view_1(apartment, delta_x):
+    rooms_list = apartment.rooms
+    for room in rooms_list:
+        print(room.dim)
+    
+    pass
+
+def plotting_view_2(apartment, delta_x):
+    boxes = [
+    [[0, 0], [1, 1]],
+    [[1, 0], [1, 2]], 
+    [[2, 1], [1, 1]]
+    ]
+
+    #for i, room in enumerate(apartment.rooms):
+        
+
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Create and add rectangles
+    for i, (pos, size) in enumerate(boxes):
+        rect = patches.Rectangle(pos, size[0], size[1], 
+                               edgecolor='black', 
+                               facecolor=None, 
+                               )
+        ax.add_patch(rect)
+
+    # Set axis limits and labels
+    ax.set_xlim(-0.5, 3.5)
+    ax.set_ylim(-0.5, 2.5)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_aspect('equal')
+    ax.grid(True, alpha=0.3)
+
+    plt.title('Rooms')
+    plt.show()
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -185,4 +226,7 @@ if __name__ == '__main__':
     delta_x = 1/2
     apartment = Apartment()
     apartment.initialize_apartment_proj3(delta_x)
-    #print(apartment)
+    
+    print("Plot testing")
+    plotting_view_2(apartment.rooms, delta_x)
+
