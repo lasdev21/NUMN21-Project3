@@ -49,7 +49,7 @@ class Room():
         return self.boundaries
     def update_V(self, newV, omega):
         # Update the V vector to the newV using relaxation from current with constant omega
-        self.V = omega*newV + (1-omega)*self.V
+        self.V = omega*newV.reshape(1, -1) + (1-omega)*self.V
     
     def add_boundaries(self, boundary_array):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
@@ -207,10 +207,28 @@ class Room():
     def solve(self, iterations, omega):
         # Perform an update step on the room
         # Create new boundary vector, A should be the same
+        rank = self.comm.Get_rank()
+        print(rank)
         for it in range(iterations):
-            self.comm.Recv(self.B, source=0)
-
+            print(f"Starting solve in room {rank}")
+            self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
+            print(self.B.shape)
+            print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
             new_V = scipy.linalg.solve(self.A, self.B)
+            new_V = new_V.T
+            print(f"Computed flat vector: {new_V.shape}")
             # Relaxation
+            print(f"V vector: {self.V}")
             self.update_V(new_V, omega)
-            self.comm.Send([self.V, MPI.DOUBLE], dest=0)
+            print(f"{new_V.shape}, {self.V.shape}")
+            print(f"from room: {self.V.shape}")
+            print(f"New v: {self.V}")
+            self.V = self.V.flatten()
+            self.comm.Send([self.V, MPI.DOUBLE], dest=0, tag=rank*1000 + it + 1)
+
+if __name__ == "__main__":
+    vec = np.ones(4).reshape(4, 1)
+    omega = 0.5
+    room = Room(0, np.array([1, 1]), 1/2, None)
+    room.update_V(vec, omega)
+    print(room.V)

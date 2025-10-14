@@ -69,7 +69,7 @@ class Apartment():
                             [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
-        self.comm.Send([room1.A, MPI.DOUBLE], dest=1)
+        self.comm.Send([room1.A, MPI.DOUBLE], dest=1, tag=0)
         
         #print(room1.A)
         # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
@@ -86,7 +86,7 @@ class Apartment():
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
-        self.comm.Send([room2.A, MPI.DOUBLE], dest=2)
+        self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
         #print(room1.A)
         #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
         # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
@@ -98,14 +98,14 @@ class Apartment():
                             [None, 40, np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
-        self.comm.Send([room3.A, MPI.DOUBLE], dest=3)
+        self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
         #print(room3.A)
         # After boundaries are defined, create boundary vectors B
         
         # Try modifying data in room3
         #room3.V[0:2] = 100 # We see the last two elements in room2 B vector changing!
-        room2.create_B()
-        room3.create_B()
+        #room2.create_B()
+        #room3.create_B()
         # Try some math
         '''
         vtest = scipy.linalg.solve(room2.A, room2.B)
@@ -113,15 +113,11 @@ class Apartment():
         # Try an iteration of solving all rooms
         print(f"Before solve room1 temps:\n{room1.get_temp_array()}")
         self.solve(3, omega=0.8)
-<<<<<<< HEAD
         
         # Update floor plan and print
         self.update_floor_plan()
         print(self.floor_plan)
-        
-=======
         '''
->>>>>>> origin/MatinLab
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -183,22 +179,25 @@ class Apartment():
         for it in range(iterations):
             # Solve room2 first
             b2 = room2.create_B()
-            self.comm.Send([b2, MPI.DOUBLE], dest=2)
+            
+            self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
             #room2.solve(omega)
-            self.comm.Recv(room2.V, source=2)
+            #print(f"from master: {room2.V.shape}")
+            self.comm.Recv(room2.V, source=2, tag=2000+(it+1))
+            #print(f"Received v vector from room 2: {room2.V}")
             # Solve rooms 1 and 3 next (in parallel eventually)
             b1 = room1.create_B()
             b3 = room3.create_B()
             #room1.solve(omega)
             #room3.solve(omega)
-            self.comm.Send([b1, MPI.DOUBLE], dest=1)
-            self.comm.Send([b3, MPI.DOUBLE], dest=3)
+            self.comm.Send([b1, MPI.DOUBLE], dest=1, tag=100+(it+1))
+            self.comm.Send([b3, MPI.DOUBLE], dest=3, tag=300+(it+1))
 
             #recieve from rooms
             
-            self.comm.Recv(room1.V, source=1)
+            self.comm.Recv(room1.V, source=1, tag=1000+(it+1))
             
-            self.comm.Recv(room3.V, source=3)
+            self.comm.Recv(room3.V, source=3, tag=3000+(it+1))
             
             
             print(f"After iteration {it+1} room1 temps:")
@@ -229,7 +228,7 @@ if __name__ == '__main__':
     # Then arrange the rooms into an apartment
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/2
+    delta_x = 1/10
 
     iterations = 3
     omega = 0.8
@@ -237,21 +236,20 @@ if __name__ == '__main__':
         apartment = Apartment(commMain)
         apartment.initialize_apartment_proj3(delta_x)
         apartment.solve(iterations, omega)
-        
     if rank == 1:
         room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
         #let this work
-        commMain.Recv(room1.A, source=0)
+        commMain.Recv(room1.A, source=0, tag=0)
         print(f"current room A {rank}: \n{room1.A}")
         room1.solve(iterations, omega)
     if rank == 2:
         room2 = Room(rank, np.array([1, 2]), delta_x, commMain)
-        commMain.Recv(room2.A, source=0)
+        commMain.Recv(room2.A, source=0, tag=1)
         print(f"current room A {rank}: \n{room2.A}")
         room2.solve(iterations, omega)
     if rank == 3:
         room3 = Room(rank, np.array([1, 1]), delta_x, commMain)
-        commMain.Recv(room3.A, source=0)
+        commMain.Recv(room3.A, source=0, tag=2)
         print(f"current room A {rank}: \n{room3.A}")
         room3.solve(iterations, omega)
     else:
