@@ -29,10 +29,10 @@ class Boundary():
         y_start, y_end = round(x1 / grid_size), round(y1 / grid_size)
 
         boundaries = {
-        "left":   [(0.0, round(y*grid_size, 3)) for y in range(y_start, y_end + 1)],
-        "right":  [(room_size[0], round(y*grid_size, 3)) for y in range(y_start, y_end + 1)],
-        "bottom": [(round(x*grid_size, 3), 0.0) for x in range(x_start, x_end + 1)],
-        "top":    [(round(x*grid_size, 3), room_size[1]) for x in range(x_start, x_end + 1)]
+        "left":   [(0.0, round(y, 3)) for y in range(y_start, y_end)],
+        "right":  [(room_size[0], round(y, 3)) for y in range(y_start, y_end)],
+        "bottom": [(round(x, 3), 0.0) for x in range(x_start, x_end)],
+        "top":    [(round(x, 3), room_size[1]) for x in range(x_start, x_end)]
         }
         
         return boundaries[self.side]

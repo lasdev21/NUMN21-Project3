@@ -5,44 +5,46 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from Room import Room
 
-def plotting_view_1(apartment, delta_x):
-    rooms_list = apartment.rooms
-    for room in rooms_list:
-        print(room.dim)
-    
-    pass
+def plotting_view_1(data, grid_size):
+    rows, cols = data.shape
+    fig, ax = plt.subplots()
 
-def plotting_view_2(apartment, delta_x):
-    boxes = [
-    [[0, 0], [1, 1]],
-    [[1, 0], [1, 2]], 
-    [[2, 1], [1, 1]]
-    ]
+    valid_data = data[data != -1]
+    vmin = valid_data.min()
+    vmax = valid_data.max()
+    range_values = vmax - vmin
 
-    #for i, room in enumerate(apartment.rooms):
-        
+    cmap = plt.colormaps.get_cmap('viridis')
 
+    for i in range(rows):
+        for j in range(cols):
+            value = data[i, j]
+            if value == -1:
+                continue
+            x = i*grid_size
+            y = j*grid_size
+            #print(x, y)
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+            color = cmap((value - vmin) / range_values)
 
-    # Create and add rectangles
-    for i, (pos, size) in enumerate(boxes):
-        rect = patches.Rectangle(pos, size[0], size[1], 
-                               edgecolor='black', 
-                               facecolor=None, 
-                               )
-        ax.add_patch(rect)
+            rect = patches.Rectangle((x,y), grid_size, grid_size,
+                                     edgecolor='black', facecolor=color,
+                                     alpha=0.8)
+            ax.add_patch(rect)
 
-    # Set axis limits and labels
-    ax.set_xlim(-0.5, 3.5)
-    ax.set_ylim(-0.5, 2.5)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
+    ax.set_xlim(-0.1, rows * grid_size + 0.1)
+    ax.set_ylim(-0.1, cols * grid_size + 0.1)
+    ax.set_xlabel('X Position')
+    ax.set_ylabel('Y Position')
     ax.set_aspect('equal')
     ax.grid(True, alpha=0.3)
 
-    plt.title('Rooms')
-    plt.show()
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label='Value')
+
+    plt.tight_layout()
+    return fig, ax   
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -148,7 +150,7 @@ class Apartment():
         print(f"Solution to Ax=B: {vtest}")
         # Try an iteration of solving all rooms
         print(f"Before solve room1 temps:\n{room1.get_temp_array()}")
-        self.solve(3, omega=0.8)
+        self.solve(10, omega=0.8)
         
         # Update floor plan and print
         self.update_floor_plan()
@@ -244,10 +246,10 @@ if __name__ == '__main__':
     #room2 = Room(size x, y)
     #room1.create_boundaries(array of boundaries for room 1)
     # Then arrange the rooms into an apartment
-    delta_x = 1/2
+    delta_x = 1/10
     apartment = Apartment()
     apartment.initialize_apartment_proj3(delta_x)
-    
-    print("Plot testing")
-    plotting_view_2(apartment.rooms, delta_x)
 
+    #plotting_view_1()
+    fig, ax = plotting_view_1(apartment.floor_plan, delta_x)
+    plt.show()
