@@ -1,5 +1,6 @@
 # Class for the apartment, which knows about it's rooms
 import numpy as np
+import scipy
 from Room import Room
 
 class Apartment():
@@ -75,11 +76,31 @@ class Apartment():
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
-        print(room2.A)
+        print(room1.A)
         #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
+        # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
+        room3_scale = room3.get_scale()
+        # top, left, bottom, right ordering, not that it matters
+        room3_boundaries = [[None, 15, np.array([0, room3_scale]), np.array([room3_scale, room3_scale])],
+                            [room2, 'N', np.array([0, 0]), np.array([0, room3_scale])],
+                            [None, 15, np.array([0, 0]), np.array([room3_scale, 0])],
+                            [None, 40, np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
+        room3.add_boundaries(room3_boundaries)
+        room3.create_A()
+        #print(room3.A)
         # After boundaries are defined, create boundary vectors B
         room1.create_B()
-        print(room1.B)
+        # Try modifying data in room3
+        #room3.V[0:2] = 100 # We see the last two elements in room2 B vector changing!
+        room2.create_B()
+        room3.create_B()
+        print(room2.B)
+        # Try some math
+        vtest = scipy.linalg.solve(room2.A, room2.B)
+        print(f"Solution to Ax=B: {vtest}")
+        # Try an iteration of solving all rooms
+        print(f"Before solve room1 temps:\n{room1.get_temp_array()}")
+        self.solve(3, omega=0.8)
         
         
     def add_room_to_plan(self, room, loc):
@@ -120,9 +141,23 @@ class Apartment():
         pass
     
     # solve method
-    def solve(self):
+    def solve(self, iterations, omega):
         # Start solving in each room
-        pass
+        # Follow procedure as in project desc:
+        # Given u1, u2, u3
+        #   Solve u2_k+1 on room2
+        #   Solve u1 and u3 k+1 on room1 and room3
+        #   Relaxation: uk+1 = w*uk+1 + (1-w)*uk
+        #   repeat
+        room1, room2, room3 = self.rooms
+        for it in range(iterations):
+            # Solve room2 first
+            room2.solve(omega)
+            # Solve rooms 1 and 3 next (in parallel eventually)
+            room1.solve(omega)
+            room3.solve(omega)
+            print(f"After iteration {it+1} room1 temps:")
+            print(room1.get_temp_array())
     
     # Repr output
     def __repr__(self):

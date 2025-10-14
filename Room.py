@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 # Class which holds information pertaining to each room in the simulation
 
 class Room():
@@ -41,9 +42,12 @@ class Room():
     def get_scale(self):
         return self.scale
     def get_temp_array(self):
-        return self.u
+        return self.V.reshape((self.M, self.N))
     def get_boundaries(self):
         return self.boundaries
+    def update_V(self, newV, omega):
+        # Update the V vector to the newV using relaxation from current with constant omega
+        self.V = omega*newV + (1-omega)*self.V
     
     def add_boundaries(self, boundary_array):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
@@ -136,7 +140,7 @@ class Room():
                 # Set the diagonal point equal to -3 instead along this boundary
                 for i in range(len(i_inds)):
                     A_mat[self.N*i_inds[i]+j_inds[i], self.N*i_inds[i]+j_inds[i]] = -3
-        self.A = A_mat
+        self.A = A_mat / self.h**2
         return A_mat
         
     def create_B(self):
@@ -153,15 +157,15 @@ class Room():
             if bound_type == 'N':
                 # Neumann condition here
                 neighbor_values = self.get_info(self, bound_room)
-                bound_values = neighbor_values #/ self.h
+                bound_values = neighbor_values / self.h
             elif bound_type == 'D':
                 # Dirichlet condition
                 # Get info and treat as constant boundary 
                 neighbor_values = self.get_info(self, bound_room)
-                bound_values = neighbor_values #/ self.h**2
+                bound_values = neighbor_values / self.h**2
             else:
                 # Constant given in bound_type
-                bound_values *= bound_type #/ self.h**2
+                bound_values *= bound_type / self.h**2
             # We now have the boundary values to subtract from current values
             for i in range(len(i_inds)):
                 B_vec[self.N*i_inds[i]+j_inds[i]] -= bound_values[i]
@@ -196,6 +200,10 @@ class Room():
            
     
     # Solve method
-    def solve(self):
-        # Could optionally take the ranks of rooms bordering it.
-        pass
+    def solve(self, omega):
+        # Perform an update step on the room
+        # Create new boundary vector, A should be the same
+        self.create_B()
+        new_V = scipy.linalg.solve(self.A, self.B)
+        # Relaxation
+        self.update_V(new_V, omega)
