@@ -222,6 +222,9 @@ class Apartment():
                             [None, 15, np.array([0, 0]), np.array([room1_scale, 0])],
                             [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]     
         room1.add_boundaries(room1_boundaries)
+        bound_type, bound_start, bound_end = room1.boundaries[0].get_data()
+        print(room1.extract_boundary_indices(bound_start, bound_end))
+        print(room1.boundaries[0].get_boundary_indices())
         #room1.create_A()
         
         # #print(room1.A)
@@ -355,9 +358,8 @@ if __name__ == '__main__':
     delta_x = 1/10
     apartment = Apartment(None)
     apartment.testing_boundary_class(delta_x)
-    print(apartment.rooms[0].boundaries[0].start)
 
-"""
+
 if __name__ == '__main__':
     # create apartment if on rank 0 process
     # Create the rooms first, telling each one its size
@@ -409,4 +411,3 @@ if __name__ == '__main__':
     plt.show()
 
     #print(apartment)
-"""
