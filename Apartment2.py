@@ -104,7 +104,8 @@ class Apartment():
                             [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
                             [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
-                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//2])], # right bottom half
+                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
+                            [None, 15, np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
@@ -175,9 +176,9 @@ class Apartment():
         
         # Add room 4 at (4, 1)
         room4_loc = np.array([4, 1])
-        self.room_locs.append(room4_loc)
-        self.add_room_to_plan(room4, room4_loc)
-        self.rooms.append(room4)
+        #self.room_locs.append(room4_loc)
+        #self.add_room_to_plan(room4, room4_loc)
+        #self.rooms.append(room4)
         #print("Room 4 added:")
         #print(self)
         #print()
@@ -212,7 +213,7 @@ class Apartment():
                             [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
                             [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
-                            [room4, 'D', np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
+                            [None, 15, np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
@@ -233,7 +234,7 @@ class Apartment():
         room3.create_A()
         self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
         # Room 4 has top constant 15, bottom constant 40, left Neumann with room2, right constant 15
-        room4_scale = room4.get_scale()
+        '''room4_scale = room4.get_scale()
         room4_dims = room4.get_dims()
         r4_size = room4_scale*room4_dims
         # top, left, bottom, right ordering, not that it matters
@@ -243,7 +244,7 @@ class Apartment():
                             [None, 15, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
         room4.add_boundaries(room4_boundaries)
         room4.create_A()
-        self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
+        self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)'''
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -398,7 +399,7 @@ if __name__ == '__main__':
     # Then arrange the rooms into an apartment
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/2
+    delta_x = 1/10
     layout = 'project3a'
     
     iterations = 25
@@ -467,6 +468,7 @@ if __name__ == '__main__':
         if rank == 4:
             room4 = Room(rank, np.array([1, 1]), delta_x, commMain)
             #commMain.Recv(room3.A, source=0, tag=2)
-            room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)
+            #room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)
             #print(f"current room A {rank}: \n{room4.A.toarray()}")
-            room4.solve(iterations, omega)
+            #room4.solve(iterations, omega)
+
