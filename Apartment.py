@@ -49,7 +49,6 @@ class Apartment():
         
         room3 = Room(3, np.array([1, 1]), delta_x, None)
 
-        room4 = Room(4, np.array([0.5, 0.5]), delta_x, None)
         #print("Initial plan:")
         #print(self)
         #print()
@@ -77,11 +76,6 @@ class Apartment():
         #print("Room 3 added:")
         #print(self)
         #print()
-        # Add room 3 at (2, 1)
-        room4_loc = np.array([2, 0.5])
-        self.room_locs.append(room4_loc)
-        self.add_room_to_plan(room4, room4_loc)
-        self.rooms.append(room4)
         
         
         #print("A and B below prior to scaling by h or h**2")
@@ -110,9 +104,8 @@ class Apartment():
                             [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
                             [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
-                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom half
-                            [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])] # right top half
-                            [room4, 'D', np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])]] # right middle 
+                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//2])], # right bottom half
+                            [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
         self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
@@ -132,16 +125,6 @@ class Apartment():
         #self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
         #print(room3.A)
         # After boundaries are defined, create boundary vectors B
-        
-        room4_scale = room4.get_scale()
-        # top, left, bottom, right ordering, not that it matters
-        room4_boundaries = [[None, 15, np.array([0, room4_scale]), np.array([room4_scale, room4_scale])],
-                            [room2, 'N', np.array([0, 0]), np.array([0, room4_scale])],
-                            [None, 40, np.array([0, 0]), np.array([room4_scale, 0])],
-                            [None, 15, np.array([room4_scale, 0]), np.array([room4_scale, room4_scale])]]
-        room4.add_boundaries(room4_boundaries)
-        room4.create_A()
-        self.send_sparse_matrix(room4.A, dest=3, shape_tag=4, data_tag=5)
 
         # Try modifying data in room3
         #room3.V[0:2] = 100 # We see the last two elements in room2 B vector changing!
@@ -216,7 +199,7 @@ class Apartment():
         #   Solve u1 and u3 k+1 on room1 and room3
         #   Relaxation: uk+1 = w*uk+1 + (1-w)*uk
         #   repeat
-        room1, room2, room3, room4 = self.rooms
+        room1, room2, room3 = self.rooms
         for it in range(iterations):
             # Solve room2 first
             b2 = room2.create_B()
@@ -229,12 +212,10 @@ class Apartment():
             # Solve rooms 1 and 3 next (in parallel eventually)
             b1 = room1.create_B()
             b3 = room3.create_B()
-            b4 = room4.create_B()
             #room1.solve(omega)
             #room3.solve(omega)
             self.comm.Send([b1, MPI.DOUBLE], dest=1, tag=100+(it+1))
             self.comm.Send([b3, MPI.DOUBLE], dest=3, tag=300+(it+1))
-            self.comm.Send([b4, MPI.DOUBLE], dest=4, tag=300+(it+1))
             #recieve from rooms
             
             self.comm.Recv(room1.V, source=1, tag=1000+(it+1))
