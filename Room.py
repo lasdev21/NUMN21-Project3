@@ -1,17 +1,17 @@
 import numpy as np
 import scipy
+from mpi4py import MPI
 # Class which holds information pertaining to each room in the simulation
 
 class Room():
     # Room needs to know it's dimensions for temperature matrix
     # it needs to know it's boundaries for sparse matrix construction and solving
     # needs to be given the boundaries from the apartment class
-    def __init__(self, process_rank, dim_array, delta_x):
+    def __init__(self, rank, dim_array, delta_x, comm):
         """
         Give the room the rank of the process it's running on and it's size.
         NOTE: dim_array should be (width, height)
         """
-        self.rank = process_rank
         self.dim = dim_array
         self.scale = int(1/delta_x)
         self.h = delta_x
@@ -35,6 +35,8 @@ class Room():
         self.rightIndices = np.arange((self.M - 1)*self.N, self.M*self.N, 1)
         self.bottomIndices = np.arange(0, (self.M - 1)*self.N + 1, self.N)
         self.topIndices = np.arange(self.N - 1, self.M*self.N, self.N)
+        self.rank = rank
+        self.comm = comm
     def get_rank(self):
         return self.rank
     def get_dims(self):
@@ -47,7 +49,7 @@ class Room():
         return self.boundaries
     def update_V(self, newV, omega):
         # Update the V vector to the newV using relaxation from current with constant omega
-        self.V = omega*newV + (1-omega)*self.V
+        self.V = omega*newV.reshape(1, -1) + (1-omega)*self.V
     
     def add_boundaries(self, boundary_array):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
@@ -178,6 +180,7 @@ class Room():
         # If so, destination room knows how many values to send back to current room by
         # checking its own boundary conditions for the one specifying current room
         dest_boundaries = destination_room.get_boundaries()
+        dest_room_rank = destination_room.get_rank()
         found_room = False
         for k in range(len(dest_boundaries)):
             bound_arr = dest_boundaries[k]
@@ -191,6 +194,7 @@ class Room():
             # Get indices along the boundary
             i_inds, j_inds = destination_room.extract_boundary_indices(bound_start, bound_end)
             # Send this information back to the asking room as a vector
+            
             info = np.zeros(len(i_inds))
             for i in range(len(i_inds)):
                 info[i] = destination_room.V[destination_room.N*i_inds[i]+j_inds[i]]
@@ -200,10 +204,31 @@ class Room():
            
     
     # Solve method
-    def solve(self, omega):
+    def solve(self, iterations, omega):
         # Perform an update step on the room
         # Create new boundary vector, A should be the same
-        self.create_B()
-        new_V = scipy.linalg.solve(self.A, self.B)
-        # Relaxation
-        self.update_V(new_V, omega)
+        rank = self.comm.Get_rank()
+        print(rank)
+        for it in range(iterations):
+            print(f"Starting solve in room {rank}")
+            self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
+            print(self.B.shape)
+            print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
+            new_V = scipy.linalg.solve(self.A, self.B)
+            new_V = new_V.T
+            print(f"Computed flat vector: {new_V.shape}")
+            # Relaxation
+            print(f"V vector: {self.V}")
+            self.update_V(new_V, omega)
+            print(f"{new_V.shape}, {self.V.shape}")
+            print(f"from room: {self.V.shape}")
+            print(f"New v: {self.V}")
+            self.V = self.V.flatten()
+            self.comm.Send([self.V, MPI.DOUBLE], dest=0, tag=rank*1000 + it + 1)
+
+if __name__ == "__main__":
+    vec = np.ones(4).reshape(4, 1)
+    omega = 0.5
+    room = Room(0, np.array([1, 1]), 1/2, None)
+    room.update_V(vec, omega)
+    print(room.V)
