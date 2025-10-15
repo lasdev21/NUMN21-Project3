@@ -3,6 +3,9 @@ import numpy as np
 import scipy
 from Room import Room
 from mpi4py import MPI
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -224,6 +227,51 @@ class Apartment():
             #print(f"After iteration {it+1} room1 temps:")
             #print(room1.get_temp_array())
     
+    def plot_heatmap(self, grid_size):
+        # Display the temperature values as a heatmap
+        data = self.floor_plan
+        rows, cols = data.shape
+        fig, ax = plt.subplots()
+
+        valid_data = data[data != -1]
+        vmin = valid_data.min()
+        vmax = valid_data.max()
+        range_values = vmax - vmin
+
+        cmap = plt.colormaps.get_cmap('viridis')
+
+        for i in range(rows):
+            for j in range(cols):
+                value = data[i, j]
+                if value == -1:
+                    continue
+                x = i*grid_size
+                y = j*grid_size
+                #print(x, y)
+
+                color = cmap((value - vmin) / range_values)
+
+                rect = patches.Rectangle((x,y), grid_size, grid_size,
+                                         #edgecolor='black', 
+                                         facecolor=color,
+                                         alpha=0.8)
+                ax.add_patch(rect)
+
+        ax.set_xlim(-0.1, rows * grid_size + 0.1)
+        ax.set_ylim(-0.1, cols * grid_size + 0.1)
+        ax.set_xlabel('X Position')
+        ax.set_ylabel('Y Position')
+        ax.set_aspect('equal')
+        ax.grid(True, alpha=0.3)
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label='Value')
+
+        plt.tight_layout()
+        plt.title(fr"Heat distribution with $\Delta x={delta_x}$ after {iterations} iterations")
+        plt.show()
+    
     # Repr output
     def __repr__(self):
         #max_len = max([len(str(val)) for val in self.floor_plan.flatten()])
@@ -249,9 +297,9 @@ if __name__ == '__main__':
     # Then arrange the rooms into an apartment
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/100
-
-    iterations = 3
+    delta_x = 1/20
+    
+    iterations = 10
     omega = 0.8
     if rank== 0:
         apartment = Apartment(commMain)
@@ -259,6 +307,9 @@ if __name__ == '__main__':
         apartment.solve(iterations, omega)
         # SOME PLOTTING STUFF
         apartment.update_floor_plan()
+        # Plot the heat values
+        apartment.plot_heatmap(delta_x)
+        
     if rank == 1:
         room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
         #let this work
