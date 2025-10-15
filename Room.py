@@ -219,7 +219,6 @@ class Room():
             #print(self.B.shape)
             #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
             new_V = scipy.sparse.linalg.spsolve(self.A, self.B)
-            new_V = new_V.T
             #print(f"Computed flat vector: {new_V.shape}")
             # Relaxation
             #print(f"V vector: {self.V}")
