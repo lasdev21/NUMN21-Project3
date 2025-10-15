@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-# from mpi4py import MPI
+from mpi4py import MPI
 from Boundary import Boundary
 # Class which holds information pertaining to each room in the simulation
 
@@ -155,8 +155,8 @@ class Room():
         B_vec = np.zeros(self.V.shape)
         # Look at boundaries
         for bound in self.boundaries:
-            bound_room = bound.get_neighboor
-            bound_type = bound.get_value
+            bound_room = bound.get_neighboor()
+            bound_type = bound.get_value()
             # Get indices along the boundary
             i_inds, j_inds = bound.get_boundary_indices()
             # boundary values
