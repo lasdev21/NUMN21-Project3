@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
-from mpi4py import MPI
+# from mpi4py import MPI
+from Boundary import Boundary
 # Class which holds information pertaining to each room in the simulation
 
 class Room():
@@ -51,7 +52,7 @@ class Room():
         # Update the V vector to the newV using relaxation from current with constant omega
         self.V = omega*newV.reshape(1, -1) + (1-omega)*self.V
     
-    def add_boundaries(self, boundary_array):
+    def add_boundaries(self, boundaries_list):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
         # and the second value in the tuple is the type of boundary (Dirichlet, Neumann, constant)
         # the third and fourth values are (x, y) start and end positions for the boundary
@@ -61,12 +62,11 @@ class Room():
         # Boundary will be taken as slices from start to end not including last
         # If element 0 is a Room object, we have another process on that boundary, otherwise
         # if it is a float it's a constant value
-        self.boundaries = boundary_array
         # Check whether these values are acceptable
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
+        for k in range(len(boundaries_list)):
+            bound_arr = boundaries_list[k]
             # Each bound_arr is a list of four elements as above
-            bound_type, bound_start, bound_end = bound_arr[1:]
+            bound_neighboor, bound_type, bound_start, bound_end = bound_arr[0:]
             # Check type of boundary
             assert bound_type in ['N', 'D'] or isinstance(bound_type, (int, float)), "Boundary must be either a constant, 'N', or 'D'"
             # Check bounds
@@ -74,11 +74,11 @@ class Room():
             assert bound_end[0] in [0, self.M] or bound_end[1] in [0, self.N], f"Points must be on boundary {bound_end}, {self.M}, {self.N}"
             assert bound_start[0] in [0, self.M] or bound_start[1] in [0, self.N], f"Points must be on boundary {bound_start}, {self.M}, {self.N}"
             assert np.all(bound_end-bound_start >= 0), "Starting point must have smaller values than ending point"
-            # Fix starting index in the case that the boundary specified is (self.M, ?)->(self.M, ?) or (?, self.N)->(?, self.N)
-            #if bound_start[0] == self.M:
-            #    self.boundaries[k][2][0] -= 1
-            #if bound_start[1] == self.N:
-            #    self.boundaries[k][2][1] -= 1
+            
+            new_boundary = Boundary(bound_neighboor, bound_type, bound_start, bound_end)
+            self.boundaries.append(new_boundary)
+
+        
     def extract_boundary_indices(self, bound_start, bound_end):
         # Indices of the points in the room specified in this boundary condition
         i_inds = np.arange(bound_start[0], bound_end[0])
@@ -130,10 +130,9 @@ class Room():
                 if j != 0:
                     A_mat[self.N*i+j, self.N*i+j-1] = 1 #v_i,j-1
         # Next look at boundaries
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
+        for bound in self.boundaries:
             # Each bound_arr is a list of four elements as above
-            bound_type, bound_start, bound_end = bound_arr[1:]
+            bound_type, bound_start, bound_end = bound.get_data()
             # Get indices along the boundary
             i_inds, j_inds = self.extract_boundary_indices(bound_start, bound_end)
             # Boundary condition on A

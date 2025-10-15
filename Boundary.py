@@ -4,43 +4,24 @@ def dirilchlet_condition():
     pass
 
 class Boundary():
-    def __init__(self, side, tp, location, neighbor, value):
+    def __init__(self, neighbor, value, location_start, location_end):
         """
-        string  side:       Side of the square located ("left", "right", "top" or "bottom")
-        string  tp:         Mathematical type of the boundary ("Dirichlet" or "Neumann")
-        list    location:   2 points that represents the limits of the (left to right or top to bottom)
-        room    neighbor:   Room to which the boundary is connected
-        float   value   :   Boundary value
+        neighbor:   Room to which the boundary is connected. None if it is not connected to any room.
+        value   :      Dirichlet ('D') or Neumann ('N') or constant number
+        location:   2 points that represents the limits of the (left to right or top to bottom)
         """
-        self.side = side
-        self.math_type = tp
-        self.location = location
         self.neighbor = neighbor
         self.value = value
+        self.start = location_start
+        self.end = location_end
 
-    def boundary_indices(self, grid_size, room_size):
+    def get_data(self):
+        return self.value, self.start, self.end 
+
+    def get_boundary_indices(self, room_size):
         """
-        Get grid indices that are contained in this boundary segment
+            Get grid indices that are contained in this boundary segment
         """
-
-        (x0, y0), (x1, y1) = self.location
-
-        x_start, x_end = round(x0 / grid_size), round(y0 / grid_size)
-        y_start, y_end = round(x1 / grid_size), round(y1 / grid_size)
-
-        boundaries = {
-        "left":   [(0.0, round(y, 3)) for y in range(y_start, y_end)],
-        "right":  [(room_size[0], round(y, 3)) for y in range(y_start, y_end)],
-        "bottom": [(round(x, 3), 0.0) for x in range(x_start, x_end)],
-        "top":    [(round(x, 3), room_size[1]) for x in range(x_start, x_end)]
-        }
         
-        return boundaries[self.side]
-
-
-boundar1 = Boundary("left", "D", ((0, 2),(0, 1)), None, 5)
-print(boundar1.boundary_indices(0.05, (2, 2)))
-
-        
-        
+        pass
     
