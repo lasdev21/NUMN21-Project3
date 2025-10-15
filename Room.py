@@ -22,7 +22,7 @@ class Room():
         self.V = self.u.flatten()
         # Boundaries will be accessed here for creation of A matrix and B vector
         self.boundaries = []
-        self.A = np.zeros((len(self.V), len(self.V)))
+        self.A = None
         self.B = np.zeros((len(self.V), 1))
         # Slices for boundaries in flattened arrays
         #self.topSlice = slice(0, self.N, 1)
@@ -50,6 +50,18 @@ class Room():
     def update_V(self, newV, omega):
         # Update the V vector to the newV using relaxation from current with constant omega
         self.V = omega*newV.reshape(1, -1) + (1-omega)*self.V
+    
+    def recv_sparse_matrix(self, source, shape_tag, data_tag):
+        # Receive int length using recv
+        data_len = self.comm.recv(source=source, tag=shape_tag)
+        data_len = int(data_len)
+        mat_data = np.empty((3, data_len))
+        self.comm.Recv(mat_data, source=source, tag=data_tag)
+        #print(mat_data.shape)
+        #print(mat_data)
+        # Rebuild matrix, row and col index values must be ints
+        A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int16), mat_data[2].astype(np.int16))))
+        return A_mat
     
     def add_boundaries(self, boundary_array):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
@@ -100,8 +112,8 @@ class Room():
             print("PROBLEM: i_inds or j_inds should have been empty")
         return i_inds, j_inds
     
-    def create_A(self):
-        # Create the A matrix using information in boundaries.
+    def create_dense_A(self):
+        # Create the dense np array A matrix using information in boundaries.
         A_mat = np.zeros((len(self.V), len(self.V)))
         # Setup the internal values, that is, values for which x!=0, n-1 and y!=0, m-1
         # Use neighbor average for all internal points
@@ -143,6 +155,68 @@ class Room():
                 for i in range(len(i_inds)):
                     A_mat[self.N*i_inds[i]+j_inds[i], self.N*i_inds[i]+j_inds[i]] = -3
         self.A = A_mat / self.h**2
+        return A_mat / self.h**2
+    
+    def create_A(self):
+        # Create the sparse A matrix
+        # We want an array of values, an array of row indices for those values
+        # and an array of column indices for those values
+        # These can then be fed into the scipy csr sparse matrix
+        values = []
+        row_indices = []
+        col_indices = []
+        # Use neighbor average for all internal points
+        # v_i,j is ni+j in row ni+j of A
+        # Neighbors in A of v_i,j are at positions n(i+1)+j [v_i+1,j], n(i-1)+j [v_i-1,j]
+        # ni+j+1 [v_i,j+1], and ni+j-1 [v_i,j-1] in row ni+j
+        # Iterate through the points, adding values and row/col indices
+        for i in range(0, self.M, 1):
+            for j in range(0, self.N, 1):
+                # Set up one row of A
+                row_ind = self.N*i+j
+                # v_ij
+                row_indices.append(self.N*i+j)
+                col_indices.append(self.N*i+j)
+                values.append(-4)
+                if i != self.M-1:
+                    # v_i+1,j
+                    row_indices.append(row_ind)
+                    col_indices.append(self.N*(i+1)+j)
+                    values.append(1)
+                if i != 0:
+                    # v_i-1,j
+                    row_indices.append(row_ind)
+                    col_indices.append(self.N*(i-1)+j)
+                    values.append(1)
+                if j != self.N-1:
+                    # v_i,j+1
+                    row_indices.append(row_ind)
+                    col_indices.append(self.N*i+j+1)
+                    values.append(1)
+                if j != 0:
+                    # v_i,j-1
+                    row_indices.append(row_ind)
+                    col_indices.append(self.N*i+j-1)
+                    values.append(1)
+        # Create matrix A as a compressed sparse row sparse matrix
+        A_mat = scipy.sparse.csr_matrix((values, (row_indices, col_indices)))
+        # Next look at boundaries
+        for k in range(len(self.boundaries)):
+            bound_arr = self.boundaries[k]
+            # Each bound_arr is a list of four elements as above
+            bound_type, bound_start, bound_end = bound_arr[1:]
+            # Get indices along the boundary
+            i_inds, j_inds = self.extract_boundary_indices(bound_start, bound_end)
+            diag_inds = self.N*i_inds+j_inds
+            # Boundary condition on A
+            if bound_type == 'N':
+                # Neumann condition
+                # Set the diagonal point equal to -3 instead along this boundary
+                # Index into a sparse matrix with array of row inds, array of col inds
+                A_mat[diag_inds, diag_inds] = -3
+        # Divide by h**2
+        A_mat.data = A_mat.data / self.h**2
+        self.A = A_mat
         return A_mat
         
     def create_B(self):
@@ -180,7 +254,7 @@ class Room():
         # If so, destination room knows how many values to send back to current room by
         # checking its own boundary conditions for the one specifying current room
         dest_boundaries = destination_room.get_boundaries()
-        dest_room_rank = destination_room.get_rank()
+        #dest_room_rank = destination_room.get_rank()
         found_room = False
         for k in range(len(dest_boundaries)):
             bound_arr = dest_boundaries[k]
@@ -208,21 +282,21 @@ class Room():
         # Perform an update step on the room
         # Create new boundary vector, A should be the same
         rank = self.comm.Get_rank()
-        print(rank)
+        #print(rank)
         for it in range(iterations):
-            print(f"Starting solve in room {rank}")
+            #print(f"Starting solve in room {rank}")
             self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
-            print(self.B.shape)
-            print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
-            new_V = scipy.linalg.solve(self.A, self.B)
+            #print(self.B.shape)
+            #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
+            new_V = scipy.sparse.linalg.spsolve(self.A, self.B)
             new_V = new_V.T
-            print(f"Computed flat vector: {new_V.shape}")
+            #print(f"Computed flat vector: {new_V.shape}")
             # Relaxation
-            print(f"V vector: {self.V}")
+            #print(f"V vector: {self.V}")
             self.update_V(new_V, omega)
-            print(f"{new_V.shape}, {self.V.shape}")
-            print(f"from room: {self.V.shape}")
-            print(f"New v: {self.V}")
+            #print(f"{new_V.shape}, {self.V.shape}")
+            #print(f"from room: {self.V.shape}")
+            #print(f"New v: {self.V}")
             self.V = self.V.flatten()
             self.comm.Send([self.V, MPI.DOUBLE], dest=0, tag=rank*1000 + it + 1)
 

@@ -21,6 +21,21 @@ class Apartment():
         self.floor_plan = np.array([[-1]])
         self.comm = comm
     
+    def send_sparse_matrix(self, matrix, dest, shape_tag, data_tag):
+        # Convert to a COO sparse matrix so data is all same shape
+        coo_mat = matrix.tocoo()
+        # Extract the sparse matrix data
+        data = coo_mat.data
+        row_indices = coo_mat.row
+        col_indices = coo_mat.col
+        assert len(data) == len(row_indices) == len(col_indices), "All arrays should be same length"
+        data_len = len(data)
+        # Send the length to the room for creation of empty recv obj
+        self.comm.send(data_len, dest=dest, tag=shape_tag)
+        # Send the data itself as a vstack
+        mat_data = np.vstack((data, row_indices, col_indices))
+        self.comm.Send([mat_data, MPI.DOUBLE], dest=dest, tag=data_tag)
+    
     # Function to create an apartment that matches the design in project 3
     def initialize_apartment_proj3(self, delta_x):
         # Create the apartment in project 3, containing one room 1x1 connected at the lower left
@@ -31,33 +46,35 @@ class Apartment():
         room2 = Room(2, np.array([1, 2]), delta_x, None)
         
         room3 = Room(3, np.array([1, 1]), delta_x, None)
-        print("Initial plan:")
-        print(self)
-        print()
+        #print("Initial plan:")
+        #print(self)
+        #print()
         # Add room 1 at (0, 0)
         room1_loc = np.array([0, 0])
         self.room_locs.append(room1_loc)
         self.add_room_to_plan(room1, room1_loc)
         self.rooms.append(room1)
-        print("Room 1 added:")
-        print(self)
-        print()
+        #print("Room 1 added:")
+        #print(self)
+        #print()
         # Add room 2 at (1, 0)
         room2_loc = np.array([1, 0])
         self.room_locs.append(room2_loc)
         self.add_room_to_plan(room2, room2_loc)
         self.rooms.append(room2)
-        print("Room 2 added:")
-        print(self)
-        print()
+        #print("Room 2 added:")
+        #print(self)
+        #print()
         # Add room 3 at (2, 1)
         room2_loc = np.array([2, 1])
         self.room_locs.append(room2_loc)
         self.add_room_to_plan(room3, room2_loc)
         self.rooms.append(room3)
-        print("Room 3 added:")
-        print(self)
-        print()
+        #print("Room 3 added:")
+        #print(self)
+        #print()
+        
+        
         #print("A and B below prior to scaling by h or h**2")
         # Add boundaries
         # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
@@ -69,7 +86,9 @@ class Apartment():
                             [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
-        self.comm.Send([room1.A, MPI.DOUBLE], dest=1, tag=0)
+        #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
+        self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
+        #self.comm.Send([room1.A, MPI.DOUBLE], dest=1, tag=0)
         
         #print(room1.A)
         # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
@@ -86,7 +105,8 @@ class Apartment():
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
-        self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
+        self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
+        #self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
         #print(room1.A)
         #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
         # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
@@ -98,7 +118,8 @@ class Apartment():
                             [None, 40, np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
-        self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
+        self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
+        #self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
         #print(room3.A)
         # After boundaries are defined, create boundary vectors B
         
@@ -158,7 +179,7 @@ class Apartment():
             top_right = (room.get_dims() + self.room_locs[i]) * room.get_scale()
             room_slice_x = slice(room_array_loc[0], top_right[0])
             room_slice_y = slice(room_array_loc[1], top_right[1])
-            print(f"Room {i+1}, floor plan portion: {self.floor_plan[room_slice_x, room_slice_y].shape}")
+            #print(f"Room {i+1}, floor plan portion: {self.floor_plan[room_slice_x, room_slice_y].shape}")
             self.floor_plan[room_slice_x, room_slice_y] = room.get_temp_array()
     
     def create_apartment(self):
@@ -200,8 +221,8 @@ class Apartment():
             self.comm.Recv(room3.V, source=3, tag=3000+(it+1))
             
             
-            print(f"After iteration {it+1} room1 temps:")
-            print(room1.get_temp_array())
+            #print(f"After iteration {it+1} room1 temps:")
+            #print(room1.get_temp_array())
     
     # Repr output
     def __repr__(self):
@@ -228,7 +249,7 @@ if __name__ == '__main__':
     # Then arrange the rooms into an apartment
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/10
+    delta_x = 1/100
 
     iterations = 3
     omega = 0.8
@@ -236,21 +257,26 @@ if __name__ == '__main__':
         apartment = Apartment(commMain)
         apartment.initialize_apartment_proj3(delta_x)
         apartment.solve(iterations, omega)
+        # SOME PLOTTING STUFF
+        apartment.update_floor_plan()
     if rank == 1:
         room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
         #let this work
-        commMain.Recv(room1.A, source=0, tag=0)
-        print(f"current room A {rank}: \n{room1.A}")
+        #commMain.Recv(room1.A, source=0, tag=0)
+        room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
+        #print(f"current room A {rank}: \n{room1.A.toarray()}")
         room1.solve(iterations, omega)
     if rank == 2:
         room2 = Room(rank, np.array([1, 2]), delta_x, commMain)
-        commMain.Recv(room2.A, source=0, tag=1)
-        print(f"current room A {rank}: \n{room2.A}")
+        #commMain.Recv(room2.A, source=0, tag=1)
+        room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
+        #print(f"current room A {rank}: \n{room2.A.toarray()}")
         room2.solve(iterations, omega)
     if rank == 3:
         room3 = Room(rank, np.array([1, 1]), delta_x, commMain)
-        commMain.Recv(room3.A, source=0, tag=2)
-        print(f"current room A {rank}: \n{room3.A}")
+        #commMain.Recv(room3.A, source=0, tag=2)
+        room3.A = room3.recv_sparse_matrix(source=0, shape_tag=4, data_tag=5)
+        #print(f"current room A {rank}: \n{room3.A.toarray()}")
         room3.solve(iterations, omega)
     else:
         pass
