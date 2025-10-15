@@ -5,48 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from Boundary import Boundary
 from Room import Room
-# from mpi4py import MPI
-
-def plotting_view_1(data, grid_size):
-    rows, cols = data.shape
-    fig, ax = plt.subplots()
-
-    valid_data = data[data != -1]
-    vmin = valid_data.min()
-    vmax = valid_data.max()
-    range_values = vmax - vmin
-
-    cmap = plt.colormaps.get_cmap('viridis')
-
-    for i in range(rows):
-        for j in range(cols):
-            value = data[i, j]
-            if value == -1:
-                continue
-            x = i*grid_size
-            y = j*grid_size
-            #print(x, y)
-
-            color = cmap((value - vmin) / range_values)
-
-            rect = patches.Rectangle((x,y), grid_size, grid_size,
-                                     edgecolor='black', facecolor=color,
-                                     alpha=0.8)
-            ax.add_patch(rect)
-
-    ax.set_xlim(-0.1, rows * grid_size + 0.1)
-    ax.set_ylim(-0.1, cols * grid_size + 0.1)
-    ax.set_xlabel('X Position')
-    ax.set_ylabel('Y Position')
-    ax.set_aspect('equal')
-    ax.grid(True, alpha=0.3)
-
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-    sm.set_array([])
-    plt.colorbar(sm, ax=ax, label='Value')
-
-    plt.tight_layout()
-    return fig, ax   
+from mpi4py import MPI
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -183,78 +142,6 @@ class Apartment():
         self.update_floor_plan()
         print(self.floor_plan)
         '''
-
-    def testing_boundary_class(self, delta_x):
-        # Create the apartment in project 3, containing one room 1x1 connected at the lower left
-        # of a larger room 2x1, with another 1x1 room connected on the top right.
-        # Add room of size 1x1 at origin
-        room1 = Room(1, np.array([1, 1]), delta_x, None)
-        
-        room2 = Room(2, np.array([1, 2]), delta_x, None)
-        
-        room3 = Room(3, np.array([1, 1]), delta_x, None)
-        print("Initial plan:")
-        print(self)
-        print()
-        # Add room 1 at (0, 0)
-        room1_loc = np.array([0, 0])
-        self.room_locs.append(room1_loc)
-        self.add_room_to_plan(room1, room1_loc)
-        self.rooms.append(room1)
-        print("Room 1 added:")
-        print(self)
-        print()
-        # Add room 2 at (1, 0)
-        room2_loc = np.array([1, 0])
-        self.room_locs.append(room2_loc)
-        self.add_room_to_plan(room2, room2_loc)
-        self.rooms.append(room2)
-        print("Room 2 added:")
-        print(self)
-        print()
-        #print("A and B below prior to scaling by h or h**2")
-        # Add boundaries
-        # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
-        room1_scale = room1.get_scale()
-        # top, left, bottom, right ordering, not that it matters
-        room1_boundaries = [[None, 15, np.array([0, room1_scale]), np.array([room1_scale, room1_scale])],
-                            [None, 40, np.array([0, 0]), np.array([0, room1_scale])],
-                            [None, 15, np.array([0, 0]), np.array([room1_scale, 0])],
-                            [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]     
-        room1.add_boundaries(room1_boundaries)
-        bound_type, bound_start, bound_end = room1.boundaries[0].get_data()
-        print(room1.extract_boundary_indices(bound_start, bound_end))
-        print(room1.boundaries[0].get_boundary_indices())
-        #room1.create_A()
-        
-        # #print(room1.A)
-        # # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
-        # # on top half of left, right constant 15 on bottom half and dirichlet with room3 on top half of right
-        # room2_scale = room2.get_scale()
-        # room2_dims = room2.get_dims() # array s.t. scale * dims gives coords of top right in (x, y)
-        # r2_size = room2_scale*room2_dims
-        # # top, left, bottom, right ordering, not that it matters
-        # room2_boundaries = [[None, 40, np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])],
-        #                     [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
-        #                     [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
-        #                     [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
-        #                     [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//2])], # right bottom half
-        #                     [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
-        # room2.add_boundaries(room2_boundaries)
-        # room2.create_A()
-        # self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
-        # #print(room1.A)
-        # #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
-        # # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
-        # room3_scale = room3.get_scale()
-        # # top, left, bottom, right ordering, not that it matters
-        # room3_boundaries = [[None, 15, np.array([0, room3_scale]), np.array([room3_scale, room3_scale])],
-        #                     [room2, 'N', np.array([0, 0]), np.array([0, room3_scale])],
-        #                     [None, 15, np.array([0, 0]), np.array([room3_scale, 0])],
-        #                     [None, 40, np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
-        # room3.add_boundaries(room3_boundaries)
-        # room3.create_A()
-        # self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -340,6 +227,51 @@ class Apartment():
             #print(f"After iteration {it+1} room1 temps:")
             #print(room1.get_temp_array())
     
+    def plot_heatmap(self, grid_size):
+        # Display the temperature values as a heatmap
+        data = self.floor_plan
+        rows, cols = data.shape
+        fig, ax = plt.subplots()
+
+        valid_data = data[data != -1]
+        vmin = valid_data.min()
+        vmax = valid_data.max()
+        range_values = vmax - vmin
+
+        cmap = plt.colormaps.get_cmap('viridis')
+
+        for i in range(rows):
+            for j in range(cols):
+                value = data[i, j]
+                if value == -1:
+                    continue
+                x = i*grid_size
+                y = j*grid_size
+                #print(x, y)
+
+                color = cmap((value - vmin) / range_values)
+
+                rect = patches.Rectangle((x,y), grid_size, grid_size,
+                                         #edgecolor='black', 
+                                         facecolor=color,
+                                         alpha=0.8)
+                ax.add_patch(rect)
+
+        ax.set_xlim(-0.1, rows * grid_size + 0.1)
+        ax.set_ylim(-0.1, cols * grid_size + 0.1)
+        ax.set_xlabel('X Position')
+        ax.set_ylabel('Y Position')
+        ax.set_aspect('equal')
+        ax.grid(True, alpha=0.3)
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label='Value')
+
+        plt.tight_layout()
+        plt.title(fr"Heat distribution with $\Delta x={delta_x}$ after {iterations} iterations")
+        plt.show()
+    
     # Repr output
     def __repr__(self):
         #max_len = max([len(str(val)) for val in self.floor_plan.flatten()])
@@ -371,9 +303,9 @@ if __name__ == '__main__':
     
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/100
-
-    iterations = 3
+    delta_x = 1/20
+    
+    iterations = 10
     omega = 0.8
     if rank== 0:
         apartment = Apartment(commMain)
@@ -381,6 +313,9 @@ if __name__ == '__main__':
         apartment.solve(iterations, omega)
         # SOME PLOTTING STUFF
         apartment.update_floor_plan()
+        # Plot the heat values
+        apartment.plot_heatmap(delta_x)
+        
     if rank == 1:
         room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
         #let this work
@@ -402,12 +337,3 @@ if __name__ == '__main__':
         room3.solve(iterations, omega)
     else:
         pass
-    
-    apartment = Apartment()
-    apartment.initialize_apartment_proj3(delta_x)
-
-    #plotting_view_1()
-    fig, ax = plotting_view_1(apartment.floor_plan, delta_x)
-    plt.show()
-
-    #print(apartment)
