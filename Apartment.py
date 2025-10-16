@@ -398,8 +398,8 @@ if __name__ == '__main__':
     # Then arrange the rooms into an apartment
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
-    delta_x = 1/2
-    layout = 'project3a'
+    delta_x = 1/10
+    layout = 'project3'
     
     iterations = 25
     omega = 0.8
