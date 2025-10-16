@@ -13,13 +13,17 @@ class Room():
         Give the room the rank of the process it's running on and it's size.
         NOTE: dim_array should be (width, height)
         """
+        dim_array = dim_array.astype(np.int64)
         self.dim = dim_array
         self.scale = int(1/delta_x)
         self.h = delta_x
         self.M = int(dim_array[0] / delta_x)
         self.N = int(dim_array[1] / delta_x)
+        #print(f"matrix x:{self.M}, scale:{self.scale}")
+        #print(self.dim[0])
         # Create a temperature array for this room
         self.V = np.zeros((dim_array / delta_x).astype(np.int64)).flatten()
+        #print(self.V.shape)
         # Boundaries will be accessed here for creation of A matrix and B vector
         self.boundaries = []
         self.A = None
@@ -44,13 +48,17 @@ class Room():
         # Receive int length using recv
         data_len = self.comm.recv(source=source, tag=shape_tag)
         data_len = int(data_len)
-        mat_data = np.empty((3, data_len))
+        mat_data = np.zeros((3, data_len))
         self.comm.Recv(mat_data, source=source, tag=data_tag)
         #print(mat_data.shape)
-        #print(mat_data)
+        #print(f"After sending {mat_data.shape}: \n{mat_data}")
         # Rebuild matrix, row and col index values must be ints
         A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int64), mat_data[2].astype(np.int64))))
+        #print(f"Received matrix {A_mat.toarray()}")
         return A_mat
+    
+    def avg_temp(self):
+        return np.mean(self.get_temp_array())
     
     def add_boundaries(self, boundaries_list):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
@@ -121,7 +129,7 @@ class Room():
                     col_indices.append(self.N*i+j-1)
                     values.append(1)
         # Create matrix A as a compressed sparse row sparse matrix
-        A_mat = scipy.sparse.csr_matrix((values, (row_indices, col_indices)))
+        A_mat = scipy.sparse.csr_matrix((values, (row_indices, col_indices)), dtype=np.float64)
         # Next look at boundaries
         for bound in self.boundaries:
             # Each bound_arr is a list of four elements as above
@@ -135,12 +143,14 @@ class Room():
                 # Index into a sparse matrix with array of row inds, array of col inds
                 A_mat[diag_inds, diag_inds] = -3
         # Divide by h**2
-        A_mat.data = A_mat.data / self.h**2
+        #print(A_mat.toarray())
+        A_mat.data = A_mat.data / self.h**2 #(1/self.dim[0] * self.h)**2
+        #print(A_mat.shape)
         self.A = A_mat
         return A_mat
         
     def create_B(self):
-        B_vec = np.zeros(self.V.shape)
+        B_vec = np.zeros(self.V.shape, dtype=np.float64)
         # Look at boundaries
         for bound in self.boundaries:
             bound_room = bound.get_neighboor()
@@ -151,16 +161,18 @@ class Room():
             bound_values = np.ones(len(i_inds))
             if bound_type == 'N':
                 # Neumann condition
+                current_room_values = self.get_info_from_indices(i_inds, j_inds)
                 neighbor_values = self.get_info(self, bound_room)
-                bound_values = neighbor_values / self.h
+                # Set boundary equal to flux/derivative
+                bound_values = (neighbor_values-current_room_values) / self.h #(1/self.dim[0] * self.h)
             elif bound_type == 'D':
                 # Dirichlet condition
                 # Get info and treat as constant boundary 
                 neighbor_values = self.get_info(self, bound_room)
-                bound_values = neighbor_values / self.h**2
+                bound_values = neighbor_values / self.h**2 #(1/self.dim[0] * self.h)**2
             else:
                 # Constant given in bound_type
-                bound_values *= bound_type / self.h**2
+                bound_values *= bound_type / self.h**2 #(1/self.dim[0] * self.h)**2
             # We now have the boundary values to subtract from current values
             for i in range(len(i_inds)):
                 B_vec[self.N*i_inds[i]+j_inds[i]] -= bound_values[i]
@@ -192,7 +204,13 @@ class Room():
             return info
         if not found_room:
             raise ValueError(f"Destination room {destination_room.get_rank()} shares no boundary with current room {current_room.get_rank()}")
-           
+    
+    def get_info_from_indices(self, i_inds, j_inds):
+        # Return the info in V from these indices specified as 2d points in the MxN rep of V
+        info = np.zeros(len(i_inds))
+        for i in range(len(i_inds)):
+            info[i] = self.V[self.N*i_inds[i]+j_inds[i]]
+        return info
     
     # Solve method
     def solve(self, iterations, omega):

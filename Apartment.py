@@ -37,6 +37,7 @@ class Apartment():
         self.comm.send(data_len, dest=dest, tag=shape_tag)
         # Send the data itself as a vstack
         mat_data = np.vstack((data, row_indices, col_indices))
+        #print(f"Before sending: \n{mat_data}")
         self.comm.Send([mat_data, MPI.DOUBLE], dest=dest, tag=data_tag)
     
     # Function to create an apartment that matches the design in project 3
@@ -88,6 +89,7 @@ class Apartment():
                             [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
+        #print(f"Room1 A:\n{room1.A.toarray()}")
         #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
         self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
         
@@ -122,17 +124,18 @@ class Apartment():
         #print(room3.A)
         
     # Function to create an apartment that matches the design in project 3a extension
-    def initialize_apartment_proj3a(self, delta_x):
+    def initialize_apartment_proj3a(self, delta_x, scalar=2):
         # Create the apartment in project 3 extension, containing one room 1x1 connected at the lower left
         # of a larger room 2x1, with another 1x1 room connected on the top right and a 0.25x0.25 room
         # connected just below the top right room.
         
         # Create rooms of the right sizes
         # scale by 2 so the smallest room can be 1x1
-        room1 = Room(1, np.array([1, 1])*2, delta_x, None) 
-        room2 = Room(2, np.array([1, 2])*2, delta_x, None)
-        room3 = Room(3, np.array([1, 1])*2, delta_x, None)
-        room4 = Room(4, np.array([1, 1]), delta_x, None)
+        #scalar = 2
+        room1 = Room(1, np.array([1, 1])*scalar, delta_x, None) 
+        room2 = Room(2, np.array([1, 2])*scalar, delta_x, None)
+        room3 = Room(3, np.array([1, 1])*scalar, delta_x, None)
+        room4 = Room(4, np.array([0.5, 0.5])*scalar, delta_x, None)
         
         # Add room 1 at (0, 0)
         room1_loc = np.array([0, 0])
@@ -140,20 +143,20 @@ class Apartment():
         self.add_room_to_plan(room1, room1_loc)
         self.rooms.append(room1)
         
-        # Add room 2 at (2, 0)
-        room2_loc = np.array([2, 0])
+        # Add room 2 at (1, 0)
+        room2_loc = np.array([1, 0])*scalar
         self.room_locs.append(room2_loc)
         self.add_room_to_plan(room2, room2_loc)
         self.rooms.append(room2)
         
-        # Add room 3 at (4, 2)
-        room3_loc = np.array([4, 2])
+        # Add room 3 at (2, 1)
+        room3_loc = np.array([2, 1])*scalar
         self.room_locs.append(room3_loc)
         self.add_room_to_plan(room3, room3_loc)
         self.rooms.append(room3)
         
-        # Add room 4 at (4, 1)
-        room4_loc = np.array([4, 1])
+        # Add room 4 at (2, 0.5)
+        room4_loc = (np.array([2, 0.5])*scalar).astype(np.int64)
         self.room_locs.append(room4_loc)
         self.add_room_to_plan(room4, room4_loc)
         self.rooms.append(room4)
@@ -220,6 +223,35 @@ class Apartment():
         room4.add_boundaries(room4_boundaries)
         room4.create_A()
         self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
+    
+    # TEST
+    def simple_room_test(self, delta_x, scalar=2):
+        # Create
+        room1 = Room(1, np.array([1, 1])*scalar, delta_x, None)
+
+        #print("Initial plan:")
+        #print(self)
+        #print()
+        # Add room 1 at (0, 0)
+        room1_loc = np.array([0, 0])
+        self.room_locs.append(room1_loc)
+        self.add_room_to_plan(room1, room1_loc)
+        self.rooms.append(room1)
+        
+        # Add boundaries
+        room1_scale = room1.get_scale()
+        room1_dims = room1.get_dims()
+        r1_size = room1_scale*room1_dims
+        # top, left, bottom, right ordering, not that it matters
+        room1_boundaries = [[None, 15, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
+                            [None, 40, np.array([0, 0]), np.array([0, r1_size[1]])],
+                            [None, 15, np.array([0, 0]), np.array([r1_size[0], 0])],
+                            [None, 40, np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
+        room1.add_boundaries(room1_boundaries)
+        room1.create_A()
+        #print(f"Room1 A:\n{room1.A.toarray()}")
+        #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
+        self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -298,11 +330,38 @@ class Apartment():
             
             #print(f"After iteration {it+1} room1 temps:")
             #print(room1.get_temp_array())
+    def solve_test(self, iterations, omega):
+        for it in range(iterations):
+            b = self.rooms[0].create_B()
+            self.comm.Send([b, MPI.DOUBLE], dest=1, tag=100+(it+1))
+            self.comm.Recv(self.rooms[0].V, source=1, tag=1000+(it+1))
+        print(f"Final average temp: {self.rooms[0].avg_temp()}")
     
-    def plot_heatmap(self, grid_size):
+    def get_floor_plan_boundary_indices(self, include_internal=False):
+        # Get the boundaries of all rooms in global coordinates
+        # If include_internal is False, only choose constant boundaries (i.e. external)
+        i_inds = []
+        j_inds = []
+        for r, room in enumerate(self.rooms):
+            room_array_loc = self.room_locs[r] * room.get_scale()
+            for bound in room.boundaries:
+                if not include_internal:
+                    if bound.get_value() in ['N', 'D']:
+                        continue
+                bound_is, bound_js = bound.get_plotting_indices()
+                # Convert to global coords
+                bound_is += room_array_loc[0]
+                bound_js += room_array_loc[1]
+                # Add arrays to i and j inds
+                i_inds.append(bound_is)
+                j_inds.append(bound_js)
+        return i_inds, j_inds
+    
+    def plot_heatmap(self, grid_size, show_boundaries=True, include_internal=False):
         # Display the temperature values as a heatmap
         data = self.floor_plan
         rows, cols = data.shape
+        
         fig, ax = plt.subplots()
 
         valid_data = data[data != -1]
@@ -315,10 +374,15 @@ class Apartment():
         for i in range(rows):
             for j in range(cols):
                 value = data[i, j]
-                if value == -1:
-                    continue
                 x = i*grid_size
                 y = j*grid_size
+                if value == -1:
+                    continue # remove to make outer pts black
+                    rect = patches.Rectangle((x,y), grid_size, grid_size,
+                                             #edgecolor='black', 
+                                             facecolor='black',
+                                             alpha=0.8)
+                    ax.add_patch(rect)
                 #print(x, y)
 
                 color = cmap((value - vmin) / range_values)
@@ -328,7 +392,16 @@ class Apartment():
                                          facecolor=color,
                                          alpha=0.8)
                 ax.add_patch(rect)
-
+        
+        # Get all boundary indices (lists of boundary index arrays)
+        if show_boundaries:
+            bound_is, bound_js = self.get_floor_plan_boundary_indices(include_internal)
+            # Plot each boundary as a black line
+            for i in range(len(bound_is)):
+                x_pts = bound_is[i] * grid_size
+                y_pts = bound_js[i] * grid_size
+                ax.plot(x_pts, y_pts, color='black', lw=2.5)
+                
         ax.set_xlim(-0.1, rows * grid_size + 0.1)
         ax.set_ylim(-0.1, cols * grid_size + 0.1)
         ax.set_xlabel('X Position')
@@ -341,7 +414,7 @@ class Apartment():
         plt.colorbar(sm, ax=ax, label='Value')
 
         plt.tight_layout()
-        plt.title(fr"Heat distribution with $\Delta x=1/{int(1/delta_x)}$ after {iterations} iterations")
+        plt.title(fr"Heat distribution with $\Delta x=1/{int(1/grid_size)}$ after {iterations} iterations")
         plt.show()
     
     # Repr output
@@ -374,7 +447,7 @@ if __name__ == '__main__':
     # Argparse
     # Accepts arguments for layout, delta_x, iterations, omega
     parser = argparse.ArgumentParser(description="Modelling Laplace heat equation on room structure using parallel MPI processes")
-    parser.add_argument("layout", choices=['project3', 'project3a'], 
+    parser.add_argument("layout", choices=['project3', 'project3a', 'test'], 
                         help="""Specify the room layout you want to solve on.""")
     parser.add_argument("-dx", "--delta_x", type=int, default=10, 
                         help="The reciprocal of the gridwidth to choose. I.e. a value of 10 means 1/10 delta x.")
@@ -438,11 +511,12 @@ if __name__ == '__main__':
     elif layout == 'project3a':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 5, "Too few processes, please run again with at least 5"
+        scalar = 2
         if rank== 0:
             apartment = Apartment(commMain)
-            apartment.initialize_apartment_proj3a(delta_x)
+            apartment.initialize_apartment_proj3a(delta_x, scalar)
             apartment.solve(iterations, omega)
-            # SOME PLOTTING STUFF
+            # Update the floor plan with final temps
             apartment.update_floor_plan()
             # Plot the heat values
             if make_plot:
@@ -450,27 +524,49 @@ if __name__ == '__main__':
             else:
                 print("Completed process, plotting disabled")
         elif rank == 1:
-            room1 = Room(rank, np.array([1, 1])*2, delta_x, commMain)
+            room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             #let this work
             #commMain.Recv(room1.A, source=0, tag=0)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
             #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
         elif rank == 2:
-            room2 = Room(rank, np.array([1, 2])*2, delta_x, commMain)
+            room2 = Room(rank, np.array([1, 2])*scalar, delta_x, commMain)
             #commMain.Recv(room2.A, source=0, tag=1)
             room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
             #print(f"current room A {rank}: \n{room2.A.toarray()}")
             room2.solve(iterations, omega)
         elif rank == 3:
-            room3 = Room(rank, np.array([1, 1])*2, delta_x, commMain)
+            room3 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             #commMain.Recv(room3.A, source=0, tag=2)
             room3.A = room3.recv_sparse_matrix(source=0, shape_tag=4, data_tag=5)
             #print(f"current room A {rank}: \n{room3.A.toarray()}")
             room3.solve(iterations, omega)
         elif rank == 4:
-            room4 = Room(rank, np.array([1, 1]), delta_x, commMain)
+            room4 = Room(rank, np.array([0.5, 0.5])*scalar, delta_x, commMain)
             #commMain.Recv(room3.A, source=0, tag=2)
             room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)
             #print(f"current room A {rank}: \n{room4.A.toarray()}")
             room4.solve(iterations, omega)
+    elif layout == 'test':
+        # Make sure we have enough processes
+        assert commMain.Get_size() >= 2, "Too few processes, please run again with at least 2"
+        scalar = 7
+        if rank== 0:
+            apartment = Apartment(commMain)
+            apartment.simple_room_test(delta_x, scalar)
+            apartment.solve_test(iterations, omega)
+            # Update the floor plan with final temps
+            apartment.update_floor_plan()
+            # Plot the heat values
+            if make_plot:
+                apartment.plot_heatmap(delta_x)
+            else:
+                print("Completed process, plotting disabled")
+        elif rank == 1:
+            room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
+            #let this work
+            #commMain.Recv(room1.A, source=0, tag=0)
+            room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
+            #print(f"current room A {rank}: \n{room1.A.toarray()}")
+            room1.solve(iterations, omega)

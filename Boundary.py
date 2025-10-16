@@ -48,3 +48,18 @@ class Boundary():
         
         return i_inds, j_inds
     
+    def get_plotting_indices(self):
+        """
+            Get grid indices that are contained in this boundary segment, allowing for starting out of bounds since
+            that reflects how the plotting will look. Also include end point for the plot.
+        """
+        # Linspace from start to end inclusive
+        diff = self.end[0]-self.start[0]
+        num_pts = diff + 1
+        if diff == 0:
+            num_pts = self.end[1]-self.start[1]+1
+        i_inds = np.linspace(self.start[0], self.end[0], num_pts)
+        j_inds = np.linspace(self.start[1], self.end[1], num_pts)
+        
+        return i_inds, j_inds
+    
