@@ -402,6 +402,8 @@ if __name__ == '__main__':
     # Begin program operation
     # Project3 base
     if layout == 'project3':
+        # Make sure we have enough processes
+        assert commMain.Get_size() >= 4, "Too few processes, please run again with at least 4"
         if rank== 0:
             apartment = Apartment(commMain)
             apartment.initialize_apartment_proj3(delta_x)
@@ -434,6 +436,8 @@ if __name__ == '__main__':
             room3.solve(iterations, omega)
     # Extension
     elif layout == 'project3a':
+        # Make sure we have enough processes
+        assert commMain.Get_size() >= 5, "Too few processes, please run again with at least 5"
         if rank== 0:
             apartment = Apartment(commMain)
             apartment.initialize_apartment_proj3a(delta_x)
