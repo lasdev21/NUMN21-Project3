@@ -19,7 +19,7 @@ class Room():
         self.M = int(dim_array[0] / delta_x)
         self.N = int(dim_array[1] / delta_x)
         # Create a temperature array for this room
-        self.V = np.zeros((dim_array / delta_x).astype(np.int16)).flatten()
+        self.V = np.zeros((dim_array / delta_x).astype(np.int64)).flatten()
         # Boundaries will be accessed here for creation of A matrix and B vector
         self.boundaries = []
         self.A = None
@@ -49,7 +49,7 @@ class Room():
         #print(mat_data.shape)
         #print(mat_data)
         # Rebuild matrix, row and col index values must be ints
-        A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int16), mat_data[2].astype(np.int16))))
+        A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int64), mat_data[2].astype(np.int64))))
         return A_mat
     
     def add_boundaries(self, boundaries_list):
