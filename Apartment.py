@@ -1,11 +1,9 @@
 # Class for the apartment, which knows about it's rooms
 import numpy as np
-import scipy
-from Room import Room
-from mpi4py import MPI
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-
+from Room import Room
+from mpi4py import MPI
 
 class Apartment():
     # Know about its rooms, how many, how they are connected
@@ -49,6 +47,7 @@ class Apartment():
         room2 = Room(2, np.array([1, 2]), delta_x, None)
         
         room3 = Room(3, np.array([1, 1]), delta_x, None)
+
         #print("Initial plan:")
         #print(self)
         #print()
@@ -77,8 +76,6 @@ class Apartment():
         #print(self)
         #print()
         
-        
-        #print("A and B below prior to scaling by h or h**2")
         # Add boundaries
         # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
         room1_scale = room1.get_scale()
@@ -91,7 +88,6 @@ class Apartment():
         room1.create_A()
         #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
         self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
-        #self.comm.Send([room1.A, MPI.DOUBLE], dest=1, tag=0)
         
         #print(room1.A)
         # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
@@ -109,7 +105,6 @@ class Apartment():
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
         self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
-        #self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
         #print(room1.A)
         #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
         # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
@@ -122,26 +117,8 @@ class Apartment():
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
         self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
-        #self.comm.Send([room3.A, MPI.DOUBLE], dest=3, tag=2)
         #print(room3.A)
-        # After boundaries are defined, create boundary vectors B
         
-        # Try modifying data in room3
-        #room3.V[0:2] = 100 # We see the last two elements in room2 B vector changing!
-        #room2.create_B()
-        #room3.create_B()
-        # Try some math
-        '''
-        vtest = scipy.linalg.solve(room2.A, room2.B)
-        print(f"Solution to Ax=B: {vtest}")
-        # Try an iteration of solving all rooms
-        print(f"Before solve room1 temps:\n{room1.get_temp_array()}")
-        self.solve(3, omega=0.8)
-        
-        # Update floor plan and print
-        self.update_floor_plan()
-        print(self.floor_plan)
-        '''
     # Function to create an apartment that matches the design in project 3a extension
     def initialize_apartment_proj3a(self, delta_x):
         # Create the apartment in project 3 extension, containing one room 1x1 connected at the lower left
@@ -181,7 +158,6 @@ class Apartment():
         #print("Room 4 added:")
         #print(self)
         #print()
-        #self.plot_heatmap(1/2)
         
         #print("A and B below prior to scaling by h or h**2")
         # Add boundaries
@@ -198,7 +174,6 @@ class Apartment():
         room1.create_A()
         #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
         self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
-        #self.comm.Send([room1.A, MPI.DOUBLE], dest=1, tag=0)
         
         #print(room1.A)
         # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
@@ -217,7 +192,6 @@ class Apartment():
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
         self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
-        #self.comm.Send([room2.A, MPI.DOUBLE], dest=2, tag=1)
         #print(room1.A)
         #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
         # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
@@ -287,11 +261,6 @@ class Apartment():
             room_slice_y = slice(room_array_loc[1], top_right[1])
             #print(f"Room {i+1}, floor plan portion: {self.floor_plan[room_slice_x, room_slice_y].shape}")
             self.floor_plan[room_slice_x, room_slice_y] = room.get_temp_array()
-    
-    def create_apartment(self):
-        # Take some measure of number of rooms, their sizes, where they are
-        # Create 
-        pass
     
     # solve method
     def solve(self, iterations, omega):
@@ -387,7 +356,6 @@ class Apartment():
             str_rep += row_str + '\n'
         return str_rep
 
-
 if __name__ == '__main__':
     # create apartment if on rank 0 process
     # Create the rooms first, telling each one its size
@@ -396,6 +364,7 @@ if __name__ == '__main__':
     #room2 = Room(size x, y)
     #room1.create_boundaries(array of boundaries for room 1)
     # Then arrange the rooms into an apartment
+    
     commMain = MPI.Comm.Clone(MPI.COMM_WORLD)
     rank = commMain.Get_rank()
     delta_x = 1/10
@@ -445,26 +414,26 @@ if __name__ == '__main__':
             apartment.update_floor_plan()
             # Plot the heat values
             apartment.plot_heatmap(delta_x)
-        if rank == 1:
+        elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*2, delta_x, commMain)
             #let this work
             #commMain.Recv(room1.A, source=0, tag=0)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
             #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
-        if rank == 2:
+        elif rank == 2:
             room2 = Room(rank, np.array([1, 2])*2, delta_x, commMain)
             #commMain.Recv(room2.A, source=0, tag=1)
             room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
             #print(f"current room A {rank}: \n{room2.A.toarray()}")
             room2.solve(iterations, omega)
-        if rank == 3:
+        elif rank == 3:
             room3 = Room(rank, np.array([1, 1])*2, delta_x, commMain)
             #commMain.Recv(room3.A, source=0, tag=2)
             room3.A = room3.recv_sparse_matrix(source=0, shape_tag=4, data_tag=5)
             #print(f"current room A {rank}: \n{room3.A.toarray()}")
             room3.solve(iterations, omega)
-        if rank == 4:
+        elif rank == 4:
             room4 = Room(rank, np.array([1, 1]), delta_x, commMain)
             #commMain.Recv(room3.A, source=0, tag=2)
             room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)

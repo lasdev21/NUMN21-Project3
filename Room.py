@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from mpi4py import MPI
+from Boundary import Boundary
 # Class which holds information pertaining to each room in the simulation
 
 class Room():
@@ -18,25 +19,13 @@ class Room():
         self.M = int(dim_array[0] / delta_x)
         self.N = int(dim_array[1] / delta_x)
         # Create a temperature array for this room
-        self.u = np.zeros((dim_array / delta_x).astype(np.int16))
-        self.V = self.u.flatten()
+        self.V = np.zeros((dim_array / delta_x).astype(np.int16)).flatten()
         # Boundaries will be accessed here for creation of A matrix and B vector
         self.boundaries = []
         self.A = None
         self.B = np.zeros((len(self.V), 1))
-        # Slices for boundaries in flattened arrays
-        #self.topSlice = slice(0, self.N, 1)
-        #self.bottomSlice = slice((self.M - 1)*self.N, self.M*self.N, 1)
-        #self.leftSlice = slice(0, (self.M - 1)*self.N + 1, self.N)
-        #self.rightSlice = slice(self.N - 1, self.M*self.N, self.N)
-        # Indices of boundaries in flattened array (alternative to slicing)
-        # Confusing because the array is rotated 90 degrees CW from room setup
-        self.leftIndices = np.arange(0, self.N, 1)
-        self.rightIndices = np.arange((self.M - 1)*self.N, self.M*self.N, 1)
-        self.bottomIndices = np.arange(0, (self.M - 1)*self.N + 1, self.N)
-        self.topIndices = np.arange(self.N - 1, self.M*self.N, self.N)
         self.rank = rank
-        self.comm = comm
+        self.comm = comm # MPI communication
     def get_rank(self):
         return self.rank
     def get_dims(self):
@@ -63,7 +52,7 @@ class Room():
         A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int16), mat_data[2].astype(np.int16))))
         return A_mat
     
-    def add_boundaries(self, boundary_array):
+    def add_boundaries(self, boundaries_list):
         # Take array of form [[room2,'D', startPos, endPos], [room3, 'N', startPos, endPos]] where room2, etc.. are Room objs
         # and the second value in the tuple is the type of boundary (Dirichlet, Neumann, constant)
         # the third and fourth values are (x, y) start and end positions for the boundary
@@ -73,12 +62,11 @@ class Room():
         # Boundary will be taken as slices from start to end not including last
         # If element 0 is a Room object, we have another process on that boundary, otherwise
         # if it is a float it's a constant value
-        self.boundaries = boundary_array
         # Check whether these values are acceptable
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
+        for k in range(len(boundaries_list)):
+            bound_arr = boundaries_list[k]
             # Each bound_arr is a list of four elements as above
-            bound_type, bound_start, bound_end = bound_arr[1:]
+            bound_neighboor, bound_type, bound_start, bound_end = bound_arr[0:]
             # Check type of boundary
             assert bound_type in ['N', 'D'] or isinstance(bound_type, (int, float)), "Boundary must be either a constant, 'N', or 'D'"
             # Check bounds
@@ -86,76 +74,10 @@ class Room():
             assert bound_end[0] in [0, self.M] or bound_end[1] in [0, self.N], f"Points must be on boundary {bound_end}, {self.M}, {self.N}"
             assert bound_start[0] in [0, self.M] or bound_start[1] in [0, self.N], f"Points must be on boundary {bound_start}, {self.M}, {self.N}"
             assert np.all(bound_end-bound_start >= 0), "Starting point must have smaller values than ending point"
-            # Fix starting index in the case that the boundary specified is (self.M, ?)->(self.M, ?) or (?, self.N)->(?, self.N)
-            #if bound_start[0] == self.M:
-            #    self.boundaries[k][2][0] -= 1
-            #if bound_start[1] == self.N:
-            #    self.boundaries[k][2][1] -= 1
-    def extract_boundary_indices(self, bound_start, bound_end):
-        # Indices of the points in the room specified in this boundary condition
-        i_inds = np.arange(bound_start[0], bound_end[0])
-        j_inds = np.arange(bound_start[1], bound_end[1])
-        # One of i_inds and j_inds will be empty, replace it with the constant index of the right length
-        if len(i_inds) == 0:
-            # If starting bound in x is on the edge, adjust so no indexing error
-            if bound_start[0] == self.M:
-                i_inds = np.ones(len(j_inds), dtype=np.int16) * (bound_start[0]-1)
-            else:
-                i_inds = np.ones(len(j_inds), dtype=np.int16) * bound_start[0]
-        elif len(j_inds) == 0:
-            # If starting bound in y is on the edge, adjust so no indexing error
-            if bound_start[1] == self.N:
-                j_inds = np.ones(len(i_inds), dtype=np.int16) * (bound_start[1]-1)
-            else:
-                j_inds = np.ones(len(i_inds), dtype=np.int16) * bound_start[1]
-        else:
-            print("PROBLEM: i_inds or j_inds should have been empty")
-        return i_inds, j_inds
-    
-    def create_dense_A(self):
-        # Create the dense np array A matrix using information in boundaries.
-        A_mat = np.zeros((len(self.V), len(self.V)))
-        # Setup the internal values, that is, values for which x!=0, n-1 and y!=0, m-1
-        # Use neighbor average for all internal points
-        # v_i,j is ni+j in row ni+j of A
-        # Neighbors in A of v_i,j are at positions n(i+1)+j [v_i+1,j], n(i-1)+j [v_i-1,j]
-        # ni+j+1 [v_i,j+1], and ni+j-1 [v_i,j-1] in row ni+j
-        # Diagonal indices (internal)
-        #vij_indices = np.array([[i, i] for i in range(1, len(self.V)-1, 1)])
-        # Set diagonal equal to -4
-        #A_mat[vij_indices[:, 0], vij_indices[:, 1]] = -4
-        # v_i+1,j
-        #viplus1j_indices = np.array([[i, self.N*i] for i in range(1, len(self.V)-1, 1)])
-        # Set default neighbor behavior for all points
-        # Points along edges will be missing at least one neighbor (corners missing 2)
-        # This sets everything correctly except points along Neumann boundaries
-        for i in range(0, self.M, 1):
-            for j in range(0, self.N, 1):
-                # Set one row of A
-                A_mat[self.N*i+j, self.N*i+j] = -4 # v_ij
-                if i != self.M-1:
-                    A_mat[self.N*i+j, self.N*(i+1)+j] = 1 # v_i+1,j
-                if i != 0:
-                    A_mat[self.N*i+j, self.N*(i-1)+j] = 1 #v_i-1,j
-                if j != self.N-1:
-                    A_mat[self.N*i+j, self.N*i+j+1] = 1 #v_i,j+1
-                if j != 0:
-                    A_mat[self.N*i+j, self.N*i+j-1] = 1 #v_i,j-1
-        # Next look at boundaries
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
-            # Each bound_arr is a list of four elements as above
-            bound_type, bound_start, bound_end = bound_arr[1:]
-            # Get indices along the boundary
-            i_inds, j_inds = self.extract_boundary_indices(bound_start, bound_end)
-            # Boundary condition on A
-            if bound_type == 'N':
-                # Neumann condition
-                # Set the diagonal point equal to -3 instead along this boundary
-                for i in range(len(i_inds)):
-                    A_mat[self.N*i_inds[i]+j_inds[i], self.N*i_inds[i]+j_inds[i]] = -3
-        self.A = A_mat / self.h**2
-        return A_mat / self.h**2
+            
+            new_boundary = Boundary(bound_neighboor, bound_type, bound_start, bound_end)
+            new_boundary.room_size = self.M, self.N
+            self.boundaries.append(new_boundary)
     
     def create_A(self):
         # Create the sparse A matrix
@@ -201,15 +123,13 @@ class Room():
         # Create matrix A as a compressed sparse row sparse matrix
         A_mat = scipy.sparse.csr_matrix((values, (row_indices, col_indices)))
         # Next look at boundaries
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
+        for bound in self.boundaries:
             # Each bound_arr is a list of four elements as above
-            bound_type, bound_start, bound_end = bound_arr[1:]
             # Get indices along the boundary
-            i_inds, j_inds = self.extract_boundary_indices(bound_start, bound_end)
+            i_inds, j_inds = bound.get_boundary_indices()
             diag_inds = self.N*i_inds+j_inds
             # Boundary condition on A
-            if bound_type == 'N':
+            if bound.value == 'N':
                 # Neumann condition
                 # Set the diagonal point equal to -3 instead along this boundary
                 # Index into a sparse matrix with array of row inds, array of col inds
@@ -222,16 +142,15 @@ class Room():
     def create_B(self):
         B_vec = np.zeros(self.V.shape)
         # Look at boundaries
-        for k in range(len(self.boundaries)):
-            bound_arr = self.boundaries[k]
-            # Each bound_arr is a list of four elements as above
-            bound_room, bound_type, bound_start, bound_end = bound_arr
+        for bound in self.boundaries:
+            bound_room = bound.get_neighboor()
+            bound_type = bound.get_value()
             # Get indices along the boundary
-            i_inds, j_inds = self.extract_boundary_indices(bound_start, bound_end)
+            i_inds, j_inds = bound.get_boundary_indices()
             # boundary values
             bound_values = np.ones(len(i_inds))
             if bound_type == 'N':
-                # Neumann condition here
+                # Neumann condition
                 neighbor_values = self.get_info(self, bound_room)
                 bound_values = neighbor_values / self.h
             elif bound_type == 'D':
@@ -256,19 +175,17 @@ class Room():
         dest_boundaries = destination_room.get_boundaries()
         #dest_room_rank = destination_room.get_rank()
         found_room = False
-        for k in range(len(dest_boundaries)):
-            bound_arr = dest_boundaries[k]
+        for bound in dest_boundaries:
             # Each bound_arr is a list of four elements as above
-            bound_room, bound_type, bound_start, bound_end = bound_arr
+            bound_room = bound.get_neighboor()
             if bound_room != current_room:
                 continue
             # else
             found_room = True
             # Indices of the points in the room specified in this boundary condition
             # Get indices along the boundary
-            i_inds, j_inds = destination_room.extract_boundary_indices(bound_start, bound_end)
+            i_inds, j_inds = bound.get_boundary_indices()
             # Send this information back to the asking room as a vector
-            
             info = np.zeros(len(i_inds))
             for i in range(len(i_inds)):
                 info[i] = destination_room.V[destination_room.N*i_inds[i]+j_inds[i]]
@@ -281,25 +198,25 @@ class Room():
     def solve(self, iterations, omega):
         # Perform an update step on the room
         # Create new boundary vector, A should be the same
-        rank = self.comm.Get_rank()
-        #print(rank)
+        rank = self.comm.Get_rank() # Will be 1, 2, 3, 4 depending on room
         for it in range(iterations):
             #print(f"Starting solve in room {rank}")
+            # Receive the B vector from the master process
+            # Recv waits here until it gets the next vector before each iteration
             self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
             #print(self.B.shape)
             #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
+            # Solve for the new temperatures in this room
             new_V = scipy.sparse.linalg.spsolve(self.A, self.B)
             #print(f"Computed flat vector: {new_V.shape}")
             # Relaxation
-            #print(f"V vector: {self.V}")
             self.update_V(new_V, omega)
-            #print(f"{new_V.shape}, {self.V.shape}")
-            #print(f"from room: {self.V.shape}")
-            #print(f"New v: {self.V}")
-            self.V = self.V.flatten()
+            self.V = self.V.flatten() # make sure it's not a column vector
+            # Return the info to the master process
             self.comm.Send([self.V, MPI.DOUBLE], dest=0, tag=rank*1000 + it + 1)
 
 if __name__ == "__main__":
+    # TESTING for updating V
     vec = np.ones(4).reshape(4, 1)
     omega = 0.5
     room = Room(0, np.array([1, 1]), 1/2, None)
