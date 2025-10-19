@@ -224,6 +224,108 @@ class Apartment():
         room4.create_A()
         self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
     
+    # Function to create an apartment that matches the design in project 3a extension with fully connected
+    # room 4. I.e. neumann conditions to room2 and room3 above
+    def initialize_apartment_proj3a_connected(self, delta_x, scalar=2):
+        # Create the apartment in project 3 extension, containing one room 1x1 connected at the lower left
+        # of a larger room 2x1, with another 1x1 room connected on the top right and a 0.25x0.25 room
+        # connected just below the top right room.
+        
+        # Create rooms of the right sizes
+        # scale by 2 so the smallest room can be 1x1
+        #scalar = 2
+        room1 = Room(1, np.array([1, 1])*scalar, delta_x, None) 
+        room2 = Room(2, np.array([1, 2])*scalar, delta_x, None)
+        room3 = Room(3, np.array([1, 1])*scalar, delta_x, None)
+        room4 = Room(4, np.array([0.5, 0.5])*scalar, delta_x, None)
+        
+        # Add room 1 at (0, 0)
+        room1_loc = np.array([0, 0])
+        self.room_locs.append(room1_loc)
+        self.add_room_to_plan(room1, room1_loc)
+        self.rooms.append(room1)
+        
+        # Add room 2 at (1, 0)
+        room2_loc = np.array([1, 0])*scalar
+        self.room_locs.append(room2_loc)
+        self.add_room_to_plan(room2, room2_loc)
+        self.rooms.append(room2)
+        
+        # Add room 3 at (2, 1)
+        room3_loc = np.array([2, 1])*scalar
+        self.room_locs.append(room3_loc)
+        self.add_room_to_plan(room3, room3_loc)
+        self.rooms.append(room3)
+        
+        # Add room 4 at (2, 0.5)
+        room4_loc = (np.array([2, 0.5])*scalar).astype(np.int64)
+        self.room_locs.append(room4_loc)
+        self.add_room_to_plan(room4, room4_loc)
+        self.rooms.append(room4)
+        #print("Room 4 added:")
+        #print(self)
+        #print()
+        
+        # Add boundaries
+        # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
+        room1_scale = room1.get_scale()
+        room1_dims = room1.get_dims()
+        r1_size = room1_scale*room1_dims
+        # top, left, bottom, right ordering, not that it matters
+        room1_boundaries = [[None, 15, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
+                            [None, 40, np.array([0, 0]), np.array([0, r1_size[1]])],
+                            [None, 15, np.array([0, 0]), np.array([r1_size[0], 0])],
+                            [room2, 'N', np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
+        room1.add_boundaries(room1_boundaries)
+        room1.create_A()
+        #print(f"Sparse and normal matrices are equal: {np.all(A_norm == A_sparse.toarray())}")
+        self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
+        
+        #print(room1.A)
+        # Room 2 has top constant 40, bottom constant 5, left dirichlet with room1 on bottom half and constant 15
+        # on top half of left, right constant 15 on bottom half and dirichlet with room3 on top half of right
+        room2_scale = room2.get_scale()
+        room2_dims = room2.get_dims() # array s.t. scale * dims gives coords of top right in (x, y)
+        r2_size = room2_scale*room2_dims
+        # top, left, bottom, right ordering, not that it matters
+        room2_boundaries = [[None, 40, np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])], # top
+                            [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
+                            [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
+                            [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])], # bottom
+                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
+                            [room4, 'N', np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
+                            [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
+        room2.add_boundaries(room2_boundaries)
+        room2.create_A()
+        self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
+        #print(room1.A)
+        #room2.V[0:2] = 100 # Can set values in room2 and see the boundary condition updated in room1!
+        # Room 3 has top constant 15, left Neumann with Room 2, bottom Dirichlet with Room 4 then constant 15, right constant 40
+        room3_scale = room3.get_scale()
+        room3_dims = room3.get_dims()
+        r3_size = room3_scale*room3_dims
+        # top, left, bottom, right ordering, not that it matters
+        room3_boundaries = [[None, 15, np.array([0, r3_size[1]]), np.array([r3_size[0], r3_size[1]])],
+                            [room2, 'N', np.array([0, 0]), np.array([0, r3_size[1]])],
+                            [room4, 'D', np.array([0, 0]), np.array([r3_size[0]//2, 0])],
+                            [None, 15, np.array([r3_size[0]//2, 0]), np.array([r3_size[0], 0])],
+                            [None, 40, np.array([r3_size[0], 0]), np.array([r3_size[0], r3_size[1]])]]
+        room3.add_boundaries(room3_boundaries)
+        room3.create_A()
+        self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
+        # Room 4 has top Neumann with room 3, bottom constant 40, left Neumann with room2, right constant 15
+        room4_scale = room4.get_scale()
+        room4_dims = room4.get_dims()
+        r4_size = room4_scale*room4_dims
+        # top, left, bottom, right ordering, not that it matters
+        room4_boundaries = [[room3, 'N', np.array([0, r4_size[1]]), np.array([r4_size[0], r4_size[1]])],
+                            [room2, 'D', np.array([0, 0]), np.array([0, r4_size[1]])],
+                            [None, 40, np.array([0, 0]), np.array([r4_size[0], 0])],
+                            [None, 15, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
+        room4.add_boundaries(room4_boundaries)
+        room4.create_A()
+        self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
+    
     # TEST
     def simple_room_test(self, delta_x, scalar=2):
         # Create
@@ -307,23 +409,23 @@ class Apartment():
         #   repeat
         for it in range(iterations):
             # Solve room2 first
-            b2 = self.rooms[1].create_B()
+            #b2 = self.rooms[1].create_B()
             #print(b2)
-            self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
+            #self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
             #room2.solve(omega)
             #print(f"from master: {room2.V.shape}")
-            self.comm.Recv(self.rooms[1].V, source=2, tag=2000+(it+1))
+            #self.comm.Recv(self.rooms[1].V, source=2, tag=2000+(it+1))
             #print(f"Received v vector from room 2: {room2.V}")
             # Solve all rooms but room 2 in parallel
             for r in range(len(self.rooms)):
-                if r==1:
-                    continue
+                #if r==1:
+                    #continue
                 b = self.rooms[r].create_B()
                 #print(b)
                 self.comm.Send([b, MPI.DOUBLE], dest=r+1, tag=(100*(r+1))+(it+1))
             for r in range(len(self.rooms)):
-                if r==1:
-                    continue
+                #if r==1:
+                    #continue
                 #recieve from rooms
                 self.comm.Recv(self.rooms[r].V, source=r+1, tag=(1000*(r+1))+(it+1))
             
@@ -447,7 +549,7 @@ if __name__ == '__main__':
     # Argparse
     # Accepts arguments for layout, delta_x, iterations, omega
     parser = argparse.ArgumentParser(description="Modelling Laplace heat equation on room structure using parallel MPI processes")
-    parser.add_argument("layout", choices=['project3', 'project3a', 'test'], 
+    parser.add_argument("layout", choices=['project3', 'project3a', 'project3a_connected', 'single_room'], 
                         help="""Specify the room layout you want to solve on.""")
     parser.add_argument("-dx", "--delta_x", type=int, default=10, 
                         help="The reciprocal of the gridwidth to choose. I.e. a value of 10 means 1/10 delta x.")
@@ -508,13 +610,16 @@ if __name__ == '__main__':
             #print(f"current room A {rank}: \n{room3.A.toarray()}")
             room3.solve(iterations, omega)
     # Extension
-    elif layout == 'project3a':
+    elif layout == 'project3a' or layout == 'project3a_connected':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 5, "Too few processes, please run again with at least 5"
         scalar = 2
         if rank== 0:
             apartment = Apartment(commMain)
-            apartment.initialize_apartment_proj3a(delta_x, scalar)
+            if layout == 'project3a':
+                apartment.initialize_apartment_proj3a(delta_x, scalar)
+            else:
+                apartment.initialize_apartment_proj3a_connected(delta_x, scalar)
             apartment.solve(iterations, omega)
             # Update the floor plan with final temps
             apartment.update_floor_plan()
@@ -548,7 +653,7 @@ if __name__ == '__main__':
             room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)
             #print(f"current room A {rank}: \n{room4.A.toarray()}")
             room4.solve(iterations, omega)
-    elif layout == 'test':
+    elif layout == 'single_room':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 2, "Too few processes, please run again with at least 2"
         scalar = 7
@@ -565,8 +670,6 @@ if __name__ == '__main__':
                 print("Completed process, plotting disabled")
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
-            #let this work
-            #commMain.Recv(room1.A, source=0, tag=0)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
             #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
