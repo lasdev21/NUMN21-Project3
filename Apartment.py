@@ -41,10 +41,11 @@ class Apartment():
         self.comm.Send([mat_data, MPI.DOUBLE], dest=dest, tag=data_tag)
     
     # Function to create an apartment that matches the design in project 3
-    def initialize_apartment_proj3(self, delta_x):
+    def initialize_apartment_proj3(self, delta_x, heater_temp=[40.], avg_borders=0):
         # Create the apartment in project 3, containing one room 1x1 connected at the lower left
         # of a larger room 2x1, with another 1x1 room connected on the top right.
         # Add room of size 1x1 at origin
+        # heater_temp can either be a single value or a list of length equal to number of rooms
         room1 = Room(1, np.array([1, 1]), delta_x, None)
         
         room2 = Room(2, np.array([1, 2]), delta_x, None)
@@ -79,13 +80,26 @@ class Apartment():
         #print(self)
         #print()
         
+        # If we want average borders, set the constant 15 temp borders to 'A' instead
+        neutral_border = 15
+        if avg_borders:
+            neutral_border = 'A'
+        # Check heater temp to see whether it is one vaue or a list of values
+        if len(heater_temp) > 1:
+            # check length
+            assert len(heater_temp) == len(self.rooms), f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        else:
+            # Create a list of the same value matching number of rooms
+            heater_temp = [heater_temp[0] for i in range(len(self.rooms))]
+        #print(f"Using heater temperatures:{heater_temp}")
+    
         # Add boundaries
         # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
         room1_scale = room1.get_scale()
         # top, left, bottom, right ordering, not that it matters
-        room1_boundaries = [[None, 15, np.array([0, room1_scale]), np.array([room1_scale, room1_scale])],
-                            [None, 40, np.array([0, 0]), np.array([0, room1_scale])],
-                            [None, 15, np.array([0, 0]), np.array([room1_scale, 0])],
+        room1_boundaries = [[None, neutral_border, np.array([0, room1_scale]), np.array([room1_scale, room1_scale])],
+                            [None, heater_temp[0], np.array([0, 0]), np.array([0, room1_scale])],
+                            [None, neutral_border, np.array([0, 0]), np.array([room1_scale, 0])],
                             [room2, 'N', np.array([room1_scale, 0]), np.array([room1_scale, room1_scale])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
@@ -100,11 +114,11 @@ class Apartment():
         room2_dims = room2.get_dims() # array s.t. scale * dims gives coords of top right in (x, y)
         r2_size = room2_scale*room2_dims
         # top, left, bottom, right ordering, not that it matters
-        room2_boundaries = [[None, 40, np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])],
+        room2_boundaries = [[None, heater_temp[1], np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])],
                             [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
-                            [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
+                            [None, neutral_border, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
-                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//2])], # right bottom half
+                            [None, neutral_border, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//2])], # right bottom half
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
@@ -114,17 +128,17 @@ class Apartment():
         # Room 3 has top and bottom constant 15, left Neumann with Room 2, right constant 40
         room3_scale = room3.get_scale()
         # top, left, bottom, right ordering, not that it matters
-        room3_boundaries = [[None, 15, np.array([0, room3_scale]), np.array([room3_scale, room3_scale])],
+        room3_boundaries = [[None, neutral_border, np.array([0, room3_scale]), np.array([room3_scale, room3_scale])],
                             [room2, 'N', np.array([0, 0]), np.array([0, room3_scale])],
-                            [None, 15, np.array([0, 0]), np.array([room3_scale, 0])],
-                            [None, 40, np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
+                            [None, neutral_border, np.array([0, 0]), np.array([room3_scale, 0])],
+                            [None, heater_temp[2], np.array([room3_scale, 0]), np.array([room3_scale, room3_scale])]]
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
         self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
         #print(room3.A)
         
     # Function to create an apartment that matches the design in project 3a extension
-    def initialize_apartment_proj3a(self, delta_x, scalar=2):
+    def initialize_apartment_proj3a(self, delta_x, scalar=2, heater_temp=[40.], avg_borders=0):
         # Create the apartment in project 3 extension, containing one room 1x1 connected at the lower left
         # of a larger room 2x1, with another 1x1 room connected on the top right and a 0.25x0.25 room
         # connected just below the top right room.
@@ -164,6 +178,19 @@ class Apartment():
         #print(self)
         #print()
         
+        # Neutral edges have value 15 unless averaging along borders is requested
+        neutral_border = 15
+        if avg_borders:
+            neutral_border = 'A'
+        # Check heater temp to see whether it is one vaue or a list of values
+        if len(heater_temp) > 1:
+            # check length
+            assert len(heater_temp) == len(self.rooms), f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        else:
+            # Create a list of the same value matching number of rooms
+            heater_temp = [heater_temp[0] for i in range(len(self.rooms))]
+        #print(f"Using heater temperatures:{heater_temp}")
+        
         #print("A and B below prior to scaling by h or h**2")
         # Add boundaries
         # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
@@ -171,9 +198,9 @@ class Apartment():
         room1_dims = room1.get_dims()
         r1_size = room1_scale*room1_dims
         # top, left, bottom, right ordering, not that it matters
-        room1_boundaries = [[None, 15, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
-                            [None, 40, np.array([0, 0]), np.array([0, r1_size[1]])],
-                            [None, 15, np.array([0, 0]), np.array([r1_size[0], 0])],
+        room1_boundaries = [[None, neutral_border, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
+                            [None, heater_temp[0], np.array([0, 0]), np.array([0, r1_size[1]])],
+                            [None, neutral_border, np.array([0, 0]), np.array([r1_size[0], 0])],
                             [room2, 'N', np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
@@ -187,11 +214,11 @@ class Apartment():
         room2_dims = room2.get_dims() # array s.t. scale * dims gives coords of top right in (x, y)
         r2_size = room2_scale*room2_dims
         # top, left, bottom, right ordering, not that it matters
-        room2_boundaries = [[None, 40, np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])],
+        room2_boundaries = [[None, heater_temp[1], np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])],
                             [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
-                            [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
+                            [None, neutral_border, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])],
-                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
+                            [None, neutral_border, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
                             [room4, 'D', np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
@@ -204,10 +231,10 @@ class Apartment():
         room3_dims = room3.get_dims()
         r3_size = room3_scale*room3_dims
         # top, left, bottom, right ordering, not that it matters
-        room3_boundaries = [[None, 15, np.array([0, r3_size[1]]), np.array([r3_size[0], r3_size[1]])],
+        room3_boundaries = [[None, neutral_border, np.array([0, r3_size[1]]), np.array([r3_size[0], r3_size[1]])],
                             [room2, 'N', np.array([0, 0]), np.array([0, r3_size[1]])],
-                            [None, 15, np.array([0, 0]), np.array([r3_size[0], 0])],
-                            [None, 40, np.array([r3_size[0], 0]), np.array([r3_size[0], r3_size[1]])]]
+                            [None, neutral_border, np.array([0, 0]), np.array([r3_size[0], 0])],
+                            [None, heater_temp[2], np.array([r3_size[0], 0]), np.array([r3_size[0], r3_size[1]])]]
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
         self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
@@ -216,17 +243,17 @@ class Apartment():
         room4_dims = room4.get_dims()
         r4_size = room4_scale*room4_dims
         # top, left, bottom, right ordering, not that it matters
-        room4_boundaries = [[None, 15, np.array([0, r4_size[1]]), np.array([r4_size[0], r4_size[1]])],
+        room4_boundaries = [[None, neutral_border, np.array([0, r4_size[1]]), np.array([r4_size[0], r4_size[1]])],
                             [room2, 'N', np.array([0, 0]), np.array([0, r4_size[1]])],
-                            [None, 40, np.array([0, 0]), np.array([r4_size[0], 0])],
-                            [None, 15, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
+                            [None, heater_temp[3], np.array([0, 0]), np.array([r4_size[0], 0])],
+                            [None, neutral_border, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
         room4.add_boundaries(room4_boundaries)
         room4.create_A()
         self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
     
     # Function to create an apartment that matches the design in project 3a extension with fully connected
     # room 4. I.e. neumann conditions to room2 and room3 above
-    def initialize_apartment_proj3a_connected(self, delta_x, scalar=2):
+    def initialize_apartment_proj3a_connected(self, delta_x, scalar=2, heater_temp=[40.], avg_borders=0):
         # Create the apartment in project 3 extension, containing one room 1x1 connected at the lower left
         # of a larger room 2x1, with another 1x1 room connected on the top right and a 0.25x0.25 room
         # connected just below the top right room.
@@ -266,15 +293,28 @@ class Apartment():
         #print(self)
         #print()
         
+        # Neutral edges have value 15 unless averaging along borders is requested
+        neutral_border = 15
+        if avg_borders:
+            neutral_border = 'A'
+        # Check heater temp to see whether it is one vaue or a list of values
+        if len(heater_temp) > 1:
+            # check length
+            assert len(heater_temp) == len(self.rooms), f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        else:
+            # Create a list of the same value matching number of rooms
+            heater_temp = [heater_temp[0] for i in range(len(self.rooms))]
+        #print(f"Using heater temperatures:{heater_temp}")
+        
         # Add boundaries
         # Room 1 has top and bottom constant 15, left constant 40, right Neumann with Room2
         room1_scale = room1.get_scale()
         room1_dims = room1.get_dims()
         r1_size = room1_scale*room1_dims
         # top, left, bottom, right ordering, not that it matters
-        room1_boundaries = [[None, 15, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
-                            [None, 40, np.array([0, 0]), np.array([0, r1_size[1]])],
-                            [None, 15, np.array([0, 0]), np.array([r1_size[0], 0])],
+        room1_boundaries = [[None, neutral_border, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
+                            [None, heater_temp[0], np.array([0, 0]), np.array([0, r1_size[1]])],
+                            [None, neutral_border, np.array([0, 0]), np.array([r1_size[0], 0])],
                             [room2, 'N', np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
@@ -288,11 +328,11 @@ class Apartment():
         room2_dims = room2.get_dims() # array s.t. scale * dims gives coords of top right in (x, y)
         r2_size = room2_scale*room2_dims
         # top, left, bottom, right ordering, not that it matters
-        room2_boundaries = [[None, 40, np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])], # top
+        room2_boundaries = [[None, heater_temp[1], np.array([0, r2_size[1]]), np.array([r2_size[0], r2_size[1]])], # top
                             [room1, 'D', np.array([0, 0]), np.array([0, r2_size[1]//2])], # left bottom half
-                            [None, 15, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
+                            [None, neutral_border, np.array([0, r2_size[1]//2]), np.array([0, r2_size[1]])], # left top half
                             [None, 5, np.array([0, 0]), np.array([r2_size[0], 0])], # bottom
-                            [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
+                            [None, neutral_border, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]//4])], # right bottom quarter
                             [room4, 'N', np.array([r2_size[0], r2_size[1]//4]), np.array([r2_size[0], r2_size[1]//2])], # right with room 4
                             [room3, 'D', np.array([r2_size[0], r2_size[1]//2]), np.array([r2_size[0], r2_size[1]])]] # right top half
         room2.add_boundaries(room2_boundaries)
@@ -305,11 +345,11 @@ class Apartment():
         room3_dims = room3.get_dims()
         r3_size = room3_scale*room3_dims
         # top, left, bottom, right ordering, not that it matters
-        room3_boundaries = [[None, 15, np.array([0, r3_size[1]]), np.array([r3_size[0], r3_size[1]])],
+        room3_boundaries = [[None, neutral_border, np.array([0, r3_size[1]]), np.array([r3_size[0], r3_size[1]])],
                             [room2, 'N', np.array([0, 0]), np.array([0, r3_size[1]])],
                             [room4, 'D', np.array([0, 0]), np.array([r3_size[0]//2, 0])],
-                            [None, 15, np.array([r3_size[0]//2, 0]), np.array([r3_size[0], 0])],
-                            [None, 40, np.array([r3_size[0], 0]), np.array([r3_size[0], r3_size[1]])]]
+                            [None, neutral_border, np.array([r3_size[0]//2, 0]), np.array([r3_size[0], 0])],
+                            [None, heater_temp[2], np.array([r3_size[0], 0]), np.array([r3_size[0], r3_size[1]])]]
         room3.add_boundaries(room3_boundaries)
         room3.create_A()
         self.send_sparse_matrix(room3.A, dest=3, shape_tag=4, data_tag=5)
@@ -320,14 +360,14 @@ class Apartment():
         # top, left, bottom, right ordering, not that it matters
         room4_boundaries = [[room3, 'N', np.array([0, r4_size[1]]), np.array([r4_size[0], r4_size[1]])],
                             [room2, 'D', np.array([0, 0]), np.array([0, r4_size[1]])],
-                            [None, 40, np.array([0, 0]), np.array([r4_size[0], 0])],
-                            [None, 15, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
+                            [None, heater_temp[3], np.array([0, 0]), np.array([r4_size[0], 0])],
+                            [None, neutral_border, np.array([r4_size[0], 0]), np.array([r4_size[0], r4_size[1]])]]
         room4.add_boundaries(room4_boundaries)
         room4.create_A()
         self.send_sparse_matrix(room4.A, dest=4, shape_tag=6, data_tag=7)
     
-    # TEST
-    def simple_room_test(self, delta_x, scalar=2):
+    # Single room solving
+    def simple_room_test(self, delta_x, scalar=2, heater_temp=[40.]):
         # Create
         room1 = Room(1, np.array([1, 1])*scalar, delta_x, None)
 
@@ -340,15 +380,19 @@ class Apartment():
         self.add_room_to_plan(room1, room1_loc)
         self.rooms.append(room1)
         
+        # Only one room, so should only have one heater temp
+        assert len(heater_temp) == 1, f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        #print(f"Using heater temperatures:{heater_temp}")
+        
         # Add boundaries
         room1_scale = room1.get_scale()
         room1_dims = room1.get_dims()
         r1_size = room1_scale*room1_dims
         # top, left, bottom, right ordering, not that it matters
         room1_boundaries = [[None, 15, np.array([0, r1_size[1]]), np.array([r1_size[0], r1_size[1]])],
-                            [None, 40, np.array([0, 0]), np.array([0, r1_size[1]])],
+                            [None, heater_temp[0], np.array([0, 0]), np.array([0, r1_size[1]])],
                             [None, 15, np.array([0, 0]), np.array([r1_size[0], 0])],
-                            [None, 40, np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
+                            [None, heater_temp[0], np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
         #print(f"Room1 A:\n{room1.A.toarray()}")
@@ -437,7 +481,7 @@ class Apartment():
             b = self.rooms[0].create_B()
             self.comm.Send([b, MPI.DOUBLE], dest=1, tag=100+(it+1))
             self.comm.Recv(self.rooms[0].V, source=1, tag=1000+(it+1))
-        print(f"Final average temp: {self.rooms[0].avg_temp()}")
+        #print(f"Final average temp: {self.rooms[0].avg_temp()}")
     
     def get_floor_plan_boundary_indices(self, include_internal=False):
         # Get the boundaries of all rooms in global coordinates
@@ -458,6 +502,17 @@ class Apartment():
                 i_inds.append(bound_is)
                 j_inds.append(bound_js)
         return i_inds, j_inds
+    
+    def print_average_temps(self):
+        # Go through the rooms, printing the average temp and global avg
+        print("Average temperatures:")
+        total = 0
+        for i in range(len(self.rooms)):
+            room = self.rooms[i]
+            room_avg = room.avg_temp()
+            total += room_avg
+            print(f"\tRoom {i+1}: {room_avg:.2f}")
+        print(f"Global average: {total/len(self.rooms):.2f}")
     
     def plot_heatmap(self, grid_size, show_boundaries=True, include_internal=False):
         # Display the temperature values as a heatmap
@@ -515,8 +570,9 @@ class Apartment():
         sm.set_array([])
         plt.colorbar(sm, ax=ax, label='Value')
 
-        plt.tight_layout()
-        plt.title(fr"Heat distribution with $\Delta x=1/{int(1/grid_size)}$ after {iterations} iterations")
+        fig.tight_layout()
+        plt.subplots_adjust(top=0.95, bottom=0.1)
+        ax.set_title(fr"Heat distribution with $\Delta x=1/{int(1/grid_size)}$ after {iterations} iterations")
         plt.show()
     
     # Repr output
@@ -557,15 +613,28 @@ if __name__ == '__main__':
                         help="The number of iterations to perform.")
     parser.add_argument("-w", "--omega", type=float, default=0.8,
                         help="The relaxation parameter omega.")
+    parser.add_argument("-heat", "--heater_temp", type=float, nargs='+', default=[40.],
+                        help="""The temperature of heaters across the rooms. If a single value is given, it is used \
+                            for all heaters. If multiple values are given, one must be given for each room and it used for heaters \
+                            in that room. Default 40.""")
+    parser.add_argument("-a", "--avg_borders", type=int, choices=[0, 1], default=0,
+                        help="Boolean value for replacing constant 15 temperature neutral borders with a value proportional to the avg temp along the border. Defaults to 0 (False).")
     parser.add_argument("-p", "--plot", type=int, choices=[0, 1], default=1,
                         help="Boolean value for determining plotting of outputs. Defaults to 1 (True). Note that for large (~100) delta x, plotting is very slow.")
+    parser.add_argument("--print_avgs", type=int, choices=[0, 1], default=1,
+                        help="Boolean value for displaying average temperatures of rooms once complete. Defaults to 1 (True).")
     args = parser.parse_args()
     
     delta_x = 1/args.delta_x
     layout = args.layout
     iterations = args.iterations
     omega = args.omega
+    heater_temp = args.heater_temp
+    avg_borders = args.avg_borders
+    if avg_borders:
+        print("Using averaging along neutral borders")
     make_plot = args.plot
+    print_avg = args.print_avgs
     
     # Restore stdout and stderr
     if rank != 0:
@@ -575,21 +644,17 @@ if __name__ == '__main__':
     #print(f"On process {rank}")
     #print(f"Got args:\nlayout:{layout}\ndelta:{delta_x}\niters:{iterations}\nomega:{omega}")
     # Begin program operation
+    # Create apartment on master process
+    if rank == 0:
+        apartment = Apartment(commMain)
     # Project3 base
     if layout == 'project3':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 4, "Too few processes, please run again with at least 4"
         if rank== 0:
-            apartment = Apartment(commMain)
-            apartment.initialize_apartment_proj3(delta_x)
+            #apartment = Apartment(commMain)
+            apartment.initialize_apartment_proj3(delta_x, heater_temp, avg_borders)
             apartment.solve(iterations, omega)
-            # Update the floor plan with final temps
-            apartment.update_floor_plan()
-            # Plot the heat values
-            if make_plot:
-                apartment.plot_heatmap(delta_x)
-            else:
-                print("Completed process, plotting disabled")
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
             #let this work
@@ -615,19 +680,19 @@ if __name__ == '__main__':
         assert commMain.Get_size() >= 5, "Too few processes, please run again with at least 5"
         scalar = 2
         if rank== 0:
-            apartment = Apartment(commMain)
+            #apartment = Apartment(commMain)
             if layout == 'project3a':
-                apartment.initialize_apartment_proj3a(delta_x, scalar)
+                apartment.initialize_apartment_proj3a(delta_x, scalar, heater_temp, avg_borders)
             else:
-                apartment.initialize_apartment_proj3a_connected(delta_x, scalar)
+                apartment.initialize_apartment_proj3a_connected(delta_x, scalar, heater_temp, avg_borders)
             apartment.solve(iterations, omega)
             # Update the floor plan with final temps
-            apartment.update_floor_plan()
+            #apartment.update_floor_plan()
             # Plot the heat values
-            if make_plot:
-                apartment.plot_heatmap(delta_x)
-            else:
-                print("Completed process, plotting disabled")
+            #if make_plot:
+                #apartment.plot_heatmap(delta_x)
+            #else:
+                #print("Completed process, plotting disabled")
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             #let this work
@@ -656,20 +721,34 @@ if __name__ == '__main__':
     elif layout == 'single_room':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 2, "Too few processes, please run again with at least 2"
-        scalar = 7
+        scalar = 1
         if rank== 0:
-            apartment = Apartment(commMain)
-            apartment.simple_room_test(delta_x, scalar)
+            #apartment = Apartment(commMain)
+            apartment.simple_room_test(delta_x, scalar, heater_temp)
             apartment.solve_test(iterations, omega)
             # Update the floor plan with final temps
-            apartment.update_floor_plan()
+            #apartment.update_floor_plan()
             # Plot the heat values
-            if make_plot:
-                apartment.plot_heatmap(delta_x)
-            else:
-                print("Completed process, plotting disabled")
+            #if make_plot:
+                #apartment.plot_heatmap(delta_x)
+            #else:
+                #print("Completed process, plotting disabled")
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
             #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
+            
+    # Regardless of which layout we use, plotting is decided the same way
+    # Done from master process
+    if rank == 0:
+        # Update the floor plan with final temps
+        apartment.update_floor_plan()
+        # Display the average temperatures
+        if print_avg:
+            apartment.print_average_temps()
+        # Plot the heat values
+        if make_plot:
+            apartment.plot_heatmap(delta_x)
+        else:
+            print("Completed process, plotting disabled")

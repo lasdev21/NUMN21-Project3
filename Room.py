@@ -76,7 +76,7 @@ class Room():
             # Each bound_arr is a list of four elements as above
             bound_neighboor, bound_type, bound_start, bound_end = bound_arr[0:]
             # Check type of boundary
-            assert bound_type in ['N', 'D'] or isinstance(bound_type, (int, float)), "Boundary must be either a constant, 'N', or 'D'"
+            assert bound_type in ['N', 'D', 'A'] or isinstance(bound_type, (int, float)), "Boundary must be either a constant, 'N', or 'D'"
             # Check bounds
             assert bound_end[0]-bound_start[0] == 0 or bound_end[1]-bound_start[1] == 0, "Start and end must be on the same side"
             assert bound_end[0] in [0, self.M] or bound_end[1] in [0, self.N], f"Points must be on boundary {bound_end}, {self.M}, {self.N}"
@@ -170,6 +170,11 @@ class Room():
                 # Get info and treat as constant boundary 
                 neighbor_values = self.get_info(self, bound_room)
                 bound_values = neighbor_values / self.h**2 #(1/self.dim[0] * self.h)**2
+            elif bound_type == 'A':
+                # Set boundary equal to the average temperature along the boundary
+                current_room_values = self.get_info_from_indices(i_inds, j_inds)
+                border_avg = np.mean(current_room_values)
+                bound_values *= 0.9*border_avg / self.h**2
             else:
                 # Constant given in bound_type
                 bound_values *= bound_type / self.h**2 #(1/self.dim[0] * self.h)**2
