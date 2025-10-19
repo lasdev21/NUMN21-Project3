@@ -452,15 +452,16 @@ class Apartment():
         #   Relaxation: uk+1 = w*uk+1 + (1-w)*uk
         #   repeat
         for it in range(iterations):
-            # Solve room2 first
-            #b2 = self.rooms[1].create_B()
+            ''' Solve room2 first
+            b2 = self.rooms[1].create_B()
             #print(b2)
-            #self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
-            #room2.solve(omega)
+            self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
+            room2.solve(omega)
             #print(f"from master: {room2.V.shape}")
-            #self.comm.Recv(self.rooms[1].V, source=2, tag=2000+(it+1))
+            self.comm.Recv(self.rooms[1].V, source=2, tag=2000+(it+1))
             #print(f"Received v vector from room 2: {room2.V}")
-            # Solve all rooms but room 2 in parallel
+            # Solve all rooms but room 2 in parallel'''
+            # Solve all rooms at once
             for r in range(len(self.rooms)):
                 #if r==1:
                     #continue
@@ -615,7 +616,7 @@ if __name__ == '__main__':
                         help="The relaxation parameter omega.")
     parser.add_argument("-heat", "--heater_temp", type=float, nargs='+', default=[40.],
                         help="""The temperature of heaters across the rooms. If a single value is given, it is used \
-                            for all heaters. If multiple values are given, one must be given for each room and it used for heaters \
+                            for all heaters. If multiple values are given, one must be given for each room and is used for heaters \
                             in that room. Default 40.""")
     parser.add_argument("-a", "--avg_borders", type=int, choices=[0, 1], default=0,
                         help="Boolean value for replacing constant 15 temperature neutral borders with a value proportional to the avg temp along the border. Defaults to 0 (False).")
