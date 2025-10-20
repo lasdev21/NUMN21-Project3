@@ -144,7 +144,7 @@ class Room():
                 A_mat[diag_inds, diag_inds] = -3
         # Divide by h**2
         #print(A_mat.toarray())
-        A_mat.data = A_mat.data / self.h**2 #(1/self.dim[0] * self.h)**2
+        A_mat.data = A_mat.data / self.h**2
         #print(A_mat.shape)
         self.A = A_mat
         return A_mat
@@ -164,12 +164,12 @@ class Room():
                 current_room_values = self.get_info_from_indices(i_inds, j_inds)
                 neighbor_values = self.get_info(self, bound_room)
                 # Set boundary equal to flux/derivative
-                bound_values = (neighbor_values-current_room_values) / self.h #(1/self.dim[0] * self.h)
+                bound_values = (neighbor_values-current_room_values) / self.h 
             elif bound_type == 'D':
                 # Dirichlet condition
                 # Get info and treat as constant boundary 
                 neighbor_values = self.get_info(self, bound_room)
-                bound_values = neighbor_values / self.h**2 #(1/self.dim[0] * self.h)**2
+                bound_values = neighbor_values / self.h**2 
             elif bound_type == 'A':
                 # Set boundary equal to the average temperature along the boundary
                 current_room_values = self.get_info_from_indices(i_inds, j_inds)
@@ -177,7 +177,7 @@ class Room():
                 bound_values *= 0.9*border_avg / self.h**2
             else:
                 # Constant given in bound_type
-                bound_values *= bound_type / self.h**2 #(1/self.dim[0] * self.h)**2
+                bound_values *= bound_type / self.h**2 
             # We now have the boundary values to subtract from current values
             for i in range(len(i_inds)):
                 B_vec[self.N*i_inds[i]+j_inds[i]] -= bound_values[i]
