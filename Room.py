@@ -42,7 +42,7 @@ class Room():
         return self.boundaries
     def update_V(self, newV, omega):
         # Update the V vector to the newV using relaxation from current with constant omega
-        self.V = omega*newV.reshape(1, -1) + (1-omega)*self.V
+        self.V = omega*newV.flatten() + (1-omega)*self.V.flatten()
     
     def recv_sparse_matrix(self, source, shape_tag, data_tag):
         # Receive int length using recv
@@ -227,6 +227,7 @@ class Room():
             # Receive the B vector from the master process
             # Recv waits here until it gets the next vector before each iteration
             self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
+            print(f"Iteration {it}, room {rank}, received b:\n{self.B}")
             #print(self.B.shape)
             #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
             # Solve for the new temperatures in this room
