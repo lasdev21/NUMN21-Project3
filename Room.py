@@ -2,6 +2,9 @@ import numpy as np
 import scipy
 from mpi4py import MPI
 from Boundary import Boundary
+from Output import Output
+
+output = Output(False)
 # Class which holds information pertaining to each room in the simulation
 
 class Room():
@@ -83,8 +86,7 @@ class Room():
             assert bound_start[0] in [0, self.M] or bound_start[1] in [0, self.N], f"Points must be on boundary {bound_start}, {self.M}, {self.N}"
             assert np.all(bound_end-bound_start >= 0), "Starting point must have smaller values than ending point"
             
-            new_boundary = Boundary(bound_neighboor, bound_type, bound_start, bound_end)
-            new_boundary.room_size = self.M, self.N
+            new_boundary = Boundary(bound_neighboor, bound_type, bound_start, bound_end, (self.M, self.N))
             self.boundaries.append(new_boundary)
     
     def create_A(self):
@@ -153,22 +155,27 @@ class Room():
         B_vec = np.zeros(self.V.shape, dtype=np.float64)
         # Look at boundaries
         for bound in self.boundaries:
-            bound_room = bound.get_neighboor()
+            bound_room = bound.get_neighbor()
             bound_type = bound.get_value()
             # Get indices along the boundary
             i_inds, j_inds = bound.get_boundary_indices()
             # boundary values
-            bound_values = np.ones(len(i_inds))
+            bound_values = np.ones(len(i_inds), dtype=np.float64)
             if bound_type == 'N':
                 # Neumann condition
+                output.printc(f"Neumann condition at x: {i_inds}, y: {j_inds}")
                 current_room_values = self.get_info_from_indices(i_inds, j_inds)
-                neighbor_values = self.get_info(self, bound_room)
-                # Set boundary equal to flux/derivative
-                bound_values = (neighbor_values-current_room_values) / self.h 
+                neighbor_values = self.get_info(bound_room, bound_type)
+                # Flux/derivative values approximated by finite differences: (neighbor - current)/h
+                # This is across the boundary. This value will be scaled and subtracted from the boundary value
+                #flux_values = (neighbor_values-current_room_values) / self.h # Finite diff approximation
+                flux_values = neighbor_values / self.h
+                # Set boundary equal to this flux divided by h again
+                bound_values = flux_values / self.h
             elif bound_type == 'D':
                 # Dirichlet condition
                 # Get info and treat as constant boundary 
-                neighbor_values = self.get_info(self, bound_room)
+                neighbor_values = self.get_info(bound_room, bound_type)
                 bound_values = neighbor_values / self.h**2 
             elif bound_type == 'A':
                 # Set boundary equal to the average temperature along the boundary
@@ -185,7 +192,7 @@ class Room():
         return B_vec
                 
     # Function to get information from another room
-    def get_info(self, current_room, destination_room):
+    def get_info(self, destination_room, bound_type):
         # Should be able to check whether destination room has a border with current room
         # If so, destination room knows how many values to send back to current room by
         # checking its own boundary conditions for the one specifying current room
@@ -194,25 +201,34 @@ class Room():
         found_room = False
         for bound in dest_boundaries:
             # Each bound_arr is a list of four elements as above
-            bound_room = bound.get_neighboor()
-            if bound_room != current_room:
-                continue
+            bound_room = bound.get_neighbor()
+            if bound_room is None:
+                continue # Constant boundary
+            elif bound_room.get_rank() != self.get_rank():
+                continue # Not the boundary with the current room
             # else
             found_room = True
             # Indices of the points in the room specified in this boundary condition
             # Get indices along the boundary
             i_inds, j_inds = bound.get_boundary_indices()
             # Send this information back to the asking room as a vector
-            info = np.zeros(len(i_inds))
-            for i in range(len(i_inds)):
-                info[i] = destination_room.V[destination_room.N*i_inds[i]+j_inds[i]]
+            info = destination_room.get_info_from_indices(i_inds, j_inds)
+            # If this is a Neumann boundary, return the difference between
+            # values along the other room boundary instead
+            if bound_type == 'N':
+                inner_i_inds, inner_j_inds = bound.get_inner_boundary_indices()
+                inner_info = destination_room.get_info_from_indices(inner_i_inds, inner_j_inds)
+                info = inner_info - info
+            #info = np.zeros(len(i_inds), dtype=np.float64)
+            #for i in range(len(i_inds)):
+                #info[i] = destination_room.V[destination_room.N*i_inds[i]+j_inds[i]]
             return info
         if not found_room:
-            raise ValueError(f"Destination room {destination_room.get_rank()} shares no boundary with current room {current_room.get_rank()}")
+            raise ValueError(f"Destination room {destination_room.get_rank()} shares no boundary with current room {self.get_rank()}")
     
     def get_info_from_indices(self, i_inds, j_inds):
         # Return the info in V from these indices specified as 2d points in the MxN rep of V
-        info = np.zeros(len(i_inds))
+        info = np.zeros(len(i_inds), dtype=np.float64)
         for i in range(len(i_inds)):
             info[i] = self.V[self.N*i_inds[i]+j_inds[i]]
         return info
@@ -227,7 +243,7 @@ class Room():
             # Receive the B vector from the master process
             # Recv waits here until it gets the next vector before each iteration
             self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
-            print(f"Iteration {it}, room {rank}, received b:\n{self.B}")
+            #print(f"Iteration {it}, room {rank}, received b:\n{self.B}")
             #print(self.B.shape)
             #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
             # Solve for the new temperatures in this room
