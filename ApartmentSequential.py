@@ -491,10 +491,10 @@ class Apartment():
                             [room2, 'N', np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]]
         room1.add_boundaries(room1_boundaries)
         room1.create_A()
-        print(f"Room1 A condition number: {np.linalg.cond(room1.A.toarray())}")
+        #print(f"Room1 A condition number: {np.linalg.cond(room1.A.toarray())}")
         #print(f"Room1 A:\n{room1.A.toarray()}")
-        plt.spy(room1.A.toarray(), markersize=1)
-        plt.show()
+        #plt.spy(room1.A.toarray(), markersize=1)
+        #plt.show()
         
         # Room 2
         room2_scale = room2.get_scale()
@@ -507,8 +507,44 @@ class Apartment():
                             [None, 15, np.array([r2_size[0], 0]), np.array([r2_size[0], r2_size[1]])]]
         room2.add_boundaries(room2_boundaries)
         room2.create_A()
-        print(f"Room2 A condition number: {np.linalg.cond(room2.A.toarray())}")
+        #print(f"Room2 A condition number: {np.linalg.cond(room2.A.toarray())}")
         #print(f"Room2 A:\n{room2.A.toarray()}")
+    
+    # The same double room, but solved as one for comparison
+    def double_room_combined(self, delta_x, scalar=2, heater_temp=[40.]):
+        # Create
+        room1 = Room(1, np.array([2, 1])*scalar, delta_x, None)
+
+        # Add room 1 at (0, 0)
+        room1_loc = np.array([0, 0])
+        self.room_locs.append(room1_loc)
+        self.add_room_to_plan(room1, room1_loc)
+        self.rooms.append(room1)
+        
+        # Heaters
+        if len(heater_temp) > 1:
+            # check length
+            assert len(heater_temp) == len(self.rooms), f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        else:
+            # Create a list of the same value matching number of rooms
+            heater_temp = [heater_temp[0] for i in range(len(self.rooms))]
+        
+        # Add boundaries
+        room1_scale = room1.get_scale()
+        room1_dims = room1.get_dims()
+        r1_size = room1_scale*room1_dims
+        # top, left, bottom, right ordering
+        # top: left half heater, right half 15. left: 15. bottom: right half 15, left half heater. right: 15
+        room1_boundaries = [[None, heater_temp[0], np.array([0, r1_size[1]]), np.array([r1_size[0]//2, r1_size[1]])], # top left
+                            [None, 15, np.array([r1_size[0]//2, r1_size[1]]), np.array([r1_size[0], r1_size[1]])], # top right
+                            [None, 15, np.array([0, 0]), np.array([0, r1_size[1]])], # left
+                            [None, 15, np.array([0, 0]), np.array([r1_size[0]//2, 0])], # bottom left
+                            [None, heater_temp[0], np.array([r1_size[0]//2, 0]), np.array([r1_size[0], 0])], # bottom right
+                            [None, 15, np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]] # right
+        room1.add_boundaries(room1_boundaries)
+        room1.create_A()
+        #print(f"Room1 A:\n{room1.A.toarray()}")
+        #self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
     
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
@@ -563,7 +599,7 @@ class Apartment():
         #   Relaxation: uk+1 = w*uk+1 + (1-w)*uk
         #   repeat
         for it in range(iterations):
-            #Solve room2 first
+            '''#Solve room2 first
             b2 = self.rooms[1].create_B()
             #print(b2)
             self.comm.Send([b2, MPI.DOUBLE], dest=2, tag=200+(it+1))
@@ -571,17 +607,17 @@ class Apartment():
             #print(f"from master: {room2.V.shape}")
             self.comm.Recv(self.rooms[1].V, source=2, tag=2000+(it+1))
             #print(f"Received v vector from room 2: {room2.V}")
-            # Solve all rooms but room 2 in parallel
+            # Solve all rooms but room 2 in parallel'''
             # Solve all rooms at once
             for r in range(len(self.rooms)):
-                if r==1:
-                    continue
+                #if r==1:
+                    #continue
                 b = self.rooms[r].create_B()
                 #print(b)
                 self.comm.Send([b, MPI.DOUBLE], dest=r+1, tag=(100*(r+1))+(it+1))
             for r in range(len(self.rooms)):
-                if r==1:
-                    continue
+                #if r==1:
+                    #continue
                 #recieve from rooms
                 self.comm.Recv(self.rooms[r].V, source=r+1, tag=(1000*(r+1))+(it+1))
             
@@ -663,7 +699,7 @@ class Apartment():
             print(f"\tRoom {i+1}: {room_avg:.2f}")
         print(f"Global average: {total/len(self.rooms):.2f}")
     
-    def plot_heatmap(self, grid_size, show_boundaries=True, include_internal=False):
+    def plot_heatmap(self, grid_size, show_boundaries=True, include_internal=False, highlight_mid_temps=False):
         # Display the temperature values as a heatmap
         data = self.floor_plan
         rows, cols = data.shape
@@ -676,6 +712,8 @@ class Apartment():
         range_values = vmax - vmin
 
         cmap = plt.colormaps.get_cmap('viridis')
+        if highlight_mid_temps:
+            cmap = plt.colormaps.get_cmap('seismic')
 
         for i in range(rows):
             for j in range(cols):
@@ -754,7 +792,7 @@ if __name__ == '__main__':
     # Argparse
     # Accepts arguments for layout, delta_x, iterations, omega
     parser = argparse.ArgumentParser(description="Modelling Laplace heat equation on room structure using parallel MPI processes")
-    parser.add_argument("layout", choices=['project3', 'project3a', 'project3a_connected', 'single_room', 'double_room', 'sequential'], 
+    parser.add_argument("layout", choices=['project3', 'project3a', 'project3a_connected', 'single_room', 'double_room', 'sequential', 'sequential_single'], 
                         help="""Specify the room layout you want to solve on.""")
     parser.add_argument("-dx", "--delta_x", type=int, default=10, 
                         help="The reciprocal of the gridwidth to choose. I.e. a value of 10 means 1/10 delta x.")
@@ -770,6 +808,8 @@ if __name__ == '__main__':
                         help="Boolean value for replacing constant 15 temperature neutral borders with a value proportional to the avg temp along the border. Defaults to 0 (False).")
     parser.add_argument("-p", "--plot", type=int, choices=[0, 1], default=1,
                         help="Boolean value for determining plotting of outputs. Defaults to 1 (True). Note that for large (~100) delta x, plotting is very slow.")
+    parser.add_argument("--highlights", type=int, choices=[0, 1], default=1,
+                        help="Boolean value for determining secondary plotting with highlights on midtones to show heat transfer. Defaults to 1 (True).")
     parser.add_argument("--print_avgs", type=int, choices=[0, 1], default=1,
                         help="Boolean value for displaying average temperatures of rooms once complete. Defaults to 1 (True).")
     args = parser.parse_args()
@@ -783,6 +823,7 @@ if __name__ == '__main__':
     if avg_borders:
         print("Using averaging along neutral borders")
     make_plot = args.plot
+    plot_highlights = args.highlights
     print_avg = args.print_avgs
     
     # Restore stdout and stderr
@@ -889,7 +930,7 @@ if __name__ == '__main__':
             room1.solve(iterations, omega)
     elif layout == 'double_room':
         # Make sure we have enough processes
-        assert commMain.Get_size() >= 3, "Too few processes, please run again with at least 2"
+        assert commMain.Get_size() >= 3, "Too few processes, please run again with at least 3"
         scalar = 1
         if rank== 0:
             apartment.double_room_test(delta_x, scalar, heater_temp)
@@ -919,6 +960,15 @@ if __name__ == '__main__':
             #apartment = Apartment(commMain)
             apartment.sequential_room_test(delta_x, scalar, heater_temp)
             apartment.sequential_solve(iterations, omega)
+    elif layout == 'sequential_single':
+        # Make sure we have enough processes
+        assert commMain.Get_size() >= 1, "Too few processes, please run again with at least 1"
+        scalar = 1
+        if rank== 0:
+            #apartment = Apartment(commMain)
+            apartment.double_room_combined(delta_x, scalar, heater_temp)
+            #print(f"Apartment created with {len(apartment.rooms)} rooms")
+            apartment.sequential_solve(iterations, omega)
             
     # Regardless of which layout we use, plotting is decided the same way
     # Done from master process
@@ -931,5 +981,7 @@ if __name__ == '__main__':
         # Plot the heat values
         if make_plot:
             apartment.plot_heatmap(delta_x)
+            if plot_highlights:
+                apartment.plot_heatmap(delta_x, highlight_mid_temps=True)
         else:
             print("Completed process, plotting disabled")

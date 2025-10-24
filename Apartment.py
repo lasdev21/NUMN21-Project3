@@ -450,6 +450,42 @@ class Apartment():
         room2.create_A()
         #print(f"Room1 A:\n{room1.A.toarray()}")
         self.send_sparse_matrix(room2.A, dest=2, shape_tag=2, data_tag=3)
+    
+    # The same double room, but solved as one for comparison
+    def double_room_combined(self, delta_x, scalar=2, heater_temp=[40.]):
+        # Create
+        room1 = Room(1, np.array([2, 1])*scalar, delta_x, None)
+
+        # Add room 1 at (0, 0)
+        room1_loc = np.array([0, 0])
+        self.room_locs.append(room1_loc)
+        self.add_room_to_plan(room1, room1_loc)
+        self.rooms.append(room1)
+        
+        # Heaters
+        if len(heater_temp) > 1:
+            # check length
+            assert len(heater_temp) == len(self.rooms), f"Must have either one temperature or one for each room. Got {len(heater_temp)} temps and needed {len(self.rooms)}."
+        else:
+            # Create a list of the same value matching number of rooms
+            heater_temp = [heater_temp[0] for i in range(len(self.rooms))]
+        
+        # Add boundaries
+        room1_scale = room1.get_scale()
+        room1_dims = room1.get_dims()
+        r1_size = room1_scale*room1_dims
+        # top, left, bottom, right ordering
+        # top: left half heater, right half 15. left: 15. bottom: right half 15, left half heater. right: 15
+        room1_boundaries = [[None, heater_temp[0], np.array([0, r1_size[1]]), np.array([r1_size[0]//2, r1_size[1]])], # top left
+                            [None, 15, np.array([r1_size[0]//2, r1_size[1]]), np.array([r1_size[0], r1_size[1]])], # top right
+                            [None, 15, np.array([0, 0]), np.array([0, r1_size[1]])], # left
+                            [None, 15, np.array([0, 0]), np.array([r1_size[0]//2, 0])], # bottom left
+                            [None, heater_temp[0], np.array([r1_size[0]//2, 0]), np.array([r1_size[0], 0])], # bottom right
+                            [None, 15, np.array([r1_size[0], 0]), np.array([r1_size[0], r1_size[1]])]] # right
+        room1.add_boundaries(room1_boundaries)
+        room1.create_A()
+        #print(f"Room1 A:\n{room1.A.toarray()}")
+        self.send_sparse_matrix(room1.A, dest=1, shape_tag=0, data_tag=1)
         
     def add_room_to_plan(self, room, loc):
         # Add a room to the floor plan at the given location
