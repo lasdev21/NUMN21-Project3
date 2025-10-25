@@ -819,25 +819,19 @@ if __name__ == '__main__':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 4, "Too few processes, please run again with at least 4"
         if rank== 0:
-            #apartment = Apartment(commMain)
             apartment.initialize_apartment_proj3(delta_x, heater_temp, avg_borders)
             apartment.solve(iterations, omega)
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1]), delta_x, commMain)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
-            #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
         elif rank == 2:
             room2 = Room(rank, np.array([1, 2]), delta_x, commMain)
-            #commMain.Recv(room2.A, source=0, tag=1)
             room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
-            #print(f"current room A {rank}: \n{room2.A.toarray()}")
             room2.solve(iterations, omega)
         elif rank == 3:
             room3 = Room(rank, np.array([1, 1]), delta_x, commMain)
-            #commMain.Recv(room3.A, source=0, tag=2)
             room3.A = room3.recv_sparse_matrix(source=0, shape_tag=4, data_tag=5)
-            #print(f"current room A {rank}: \n{room3.A.toarray()}")
             room3.solve(iterations, omega)
     # Extension
     elif layout == 'project3a' or layout == 'project3a_connected':
@@ -845,7 +839,6 @@ if __name__ == '__main__':
         assert commMain.Get_size() >= 5, "Too few processes, please run again with at least 5"
         scalar = 2
         if rank== 0:
-            #apartment = Apartment(commMain)
             if layout == 'project3a':
                 apartment.initialize_apartment_proj3a(delta_x, scalar, heater_temp, avg_borders)
             else:
@@ -853,40 +846,30 @@ if __name__ == '__main__':
             apartment.solve(iterations, omega)
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
-            #commMain.Recv(room1.A, source=0, tag=0)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
-            #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
         elif rank == 2:
             room2 = Room(rank, np.array([1, 2])*scalar, delta_x, commMain)
-            #commMain.Recv(room2.A, source=0, tag=1)
             room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
-            #print(f"current room A {rank}: \n{room2.A.toarray()}")
             room2.solve(iterations, omega)
         elif rank == 3:
             room3 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
-            #commMain.Recv(room3.A, source=0, tag=2)
             room3.A = room3.recv_sparse_matrix(source=0, shape_tag=4, data_tag=5)
-            #print(f"current room A {rank}: \n{room3.A.toarray()}")
             room3.solve(iterations, omega)
         elif rank == 4:
             room4 = Room(rank, np.array([0.5, 0.5])*scalar, delta_x, commMain)
-            #commMain.Recv(room3.A, source=0, tag=2)
             room4.A = room4.recv_sparse_matrix(source=0, shape_tag=6, data_tag=7)
-            #print(f"current room A {rank}: \n{room4.A.toarray()}")
             room4.solve(iterations, omega)
     elif layout == 'single_room':
         # Make sure we have enough processes
         assert commMain.Get_size() >= 2, "Too few processes, please run again with at least 2"
         scalar = 1
         if rank== 0:
-            #apartment = Apartment(commMain)
             apartment.simple_room_test(delta_x, scalar, heater_temp)
             apartment.solve(iterations, omega)
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
-            #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
     elif layout == 'double_room':
         # Make sure we have enough processes
@@ -898,12 +881,10 @@ if __name__ == '__main__':
         elif rank == 1:
             room1 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             room1.A = room1.recv_sparse_matrix(source=0, shape_tag=0, data_tag=1)
-            #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room1.solve(iterations, omega)
         elif rank == 2:
             room2 = Room(rank, np.array([1, 1])*scalar, delta_x, commMain)
             room2.A = room2.recv_sparse_matrix(source=0, shape_tag=2, data_tag=3)
-            #print(f"current room A {rank}: \n{room1.A.toarray()}")
             room2.solve(iterations, omega)
     elif layout == 'sequential':
         # Make sure we have enough processes
@@ -918,7 +899,6 @@ if __name__ == '__main__':
         scalar = 1
         if rank== 0:
             apartment.double_room_combined(delta_x, scalar, heater_temp)
-            #print(f"Apartment created with {len(apartment.rooms)} rooms")
             apartment.sequential_solve(iterations, omega)
             
     # Regardless of which layout we use, plotting is decided the same way
