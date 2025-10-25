@@ -22,11 +22,8 @@ class Room():
         self.h = delta_x
         self.M = int(dim_array[0] / delta_x)
         self.N = int(dim_array[1] / delta_x)
-        #print(f"matrix x:{self.M}, scale:{self.scale}")
-        #print(self.dim[0])
         # Create a temperature array for this room
         self.V = np.zeros((dim_array / delta_x).astype(np.int64)).flatten()
-        #print(self.V.shape)
         # Boundaries will be accessed here for creation of A matrix and B vector
         self.boundaries = []
         self.A = None
@@ -53,11 +50,8 @@ class Room():
         data_len = int(data_len)
         mat_data = np.zeros((3, data_len))
         self.comm.Recv(mat_data, source=source, tag=data_tag)
-        #print(mat_data.shape)
-        #print(f"After sending {mat_data.shape}: \n{mat_data}")
         # Rebuild matrix, row and col index values must be ints
         A_mat = scipy.sparse.csr_matrix((mat_data[0], (mat_data[1].astype(np.int64), mat_data[2].astype(np.int64))))
-        #print(f"Received matrix {A_mat.toarray()}")
         return A_mat
     
     def avg_temp(self):
@@ -145,9 +139,7 @@ class Room():
                 # Index into a sparse matrix with array of row inds, array of col inds
                 A_mat[diag_inds, diag_inds] = -3
         # Divide by h**2
-        #print(A_mat.toarray())
         A_mat.data = A_mat.data / self.h**2
-        #print(A_mat.shape)
         self.A = A_mat
         return A_mat
         
@@ -164,14 +156,12 @@ class Room():
             if bound_type == 'N':
                 # Neumann condition
                 output.printc(f"Neumann condition at x: {i_inds}, y: {j_inds}")
-                current_room_values = self.get_info_from_indices(i_inds, j_inds)
-                neighbor_values = self.get_info(bound_room, bound_type)
-                # Flux/derivative values approximated by finite differences: (neighbor - current)/h
-                # This is across the boundary. This value will be scaled and subtracted from the boundary value
-                #flux_values = (neighbor_values-current_room_values) / self.h # Finite diff approximation
-                flux_values = neighbor_values / self.h
-                # Set boundary equal to this flux divided by h again
-                bound_values = flux_values / self.h
+                # Flux/derivative values approximated by finite differences
+                # Instead of using the values on both sides of the boundary, use (inner neighbor - neighbor)/h
+                # This is between values just across the boundary and one index farther in.
+                neighbor_values = self.get_info(bound_room, bound_type) # Difference inner - neighbor
+                # Set boundary equal to this difference divided by h**2 (flux / h)
+                bound_values = neighbor_values / self.h**2
             elif bound_type == 'D':
                 # Dirichlet condition
                 # Get info and treat as constant boundary 
@@ -219,9 +209,6 @@ class Room():
                 inner_i_inds, inner_j_inds = bound.get_inner_boundary_indices()
                 inner_info = destination_room.get_info_from_indices(inner_i_inds, inner_j_inds)
                 info = inner_info - info
-            #info = np.zeros(len(i_inds), dtype=np.float64)
-            #for i in range(len(i_inds)):
-                #info[i] = destination_room.V[destination_room.N*i_inds[i]+j_inds[i]]
             return info
         if not found_room:
             raise ValueError(f"Destination room {destination_room.get_rank()} shares no boundary with current room {self.get_rank()}")
@@ -244,14 +231,11 @@ class Room():
             # Recv waits here until it gets the next vector before each iteration
             self.comm.Recv(self.B, source=0, tag=rank*100 + it + 1)
             #print(f"Iteration {it}, room {rank}, received b:\n{self.B}")
-            #print(self.B.shape)
-            #print(f"Recieved B: {self.B} in room {self.comm.Get_rank()}")
             # Solve for the new temperatures in this room
             new_V = scipy.sparse.linalg.spsolve(self.A, self.B)
             #print(f"Computed flat vector: {new_V.shape}")
             # Relaxation
             self.update_V(new_V, omega)
-            self.V = self.V.flatten() # make sure it's not a column vector
             # Return the info to the master process
             self.comm.Send([self.V, MPI.DOUBLE], dest=0, tag=rank*1000 + it + 1)
 
