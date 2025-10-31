@@ -803,6 +803,10 @@ if __name__ == '__main__':
     plot_highlights = args.highlights
     print_avg = args.print_avgs
     
+    # Warning for large deltax and low iterations
+    if args.delta_x >= 20 and iterations < 15:
+        print("WARNING: For high resolution rooms consider using more iterations to ensure convergence", file=sys.stderr)
+    
     # Restore stdout and stderr
     if rank != 0:
         sys.stdout = sys.__stdout__
