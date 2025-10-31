@@ -28,6 +28,8 @@ Note that due to the way rooms are solved, a minimum of 4 processes will be need
 
 Also, generating the temperatures is quite fast, even for large delta x values, but plotting is not. To assess runtime without plotting, use the parameter -p 0 to disable the heat plot.
 
+For high resolution rooms (20x20 or so and larger) more than 10 iterations are required to get full convergence.
+
 ## Project 3
 ### Task 1
 See matrices pdf for the A matrices generated for task1
